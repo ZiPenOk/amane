@@ -1,7 +1,7 @@
 """显式来源的清单展开: 由选中项求出该作品的完整足迹.
 
 删除文件 = 媒体文件自身 + 按库路径模板反解出的刮削产物 + 同目录同名字幕;
-模板产物之外, 再按视频名前缀补收同目录的 nfo / 图 / 预告片 (见 _add_named_siblings);
+模板产物之外, 再按视频名前缀补收同目录的 nfo / 图 / 预告片 / 分片 (见 _add_name_prefixed_siblings);
 删除文件与作品文件夹 = 该作品文件夹下的全部内容, 只在该目录仅含这一条媒体索引且不是库根时提供.
 展开只收库根内的路径: 配置链接模板时产物落在库外的链接树, 那些不归本功能管;
 工作目录里的目录链接 (Windows 的 junction 与挂载点) 同样不展开, 它由用户布置.
@@ -41,18 +41,6 @@ logger = structlog.get_logger()
 
 _Add = Callable[[Path], bool]
 """往清单里加一条; 返回它是否真的进了清单 (不存在 / 库外 / 触顶都是 False)."""
-
-# 兜底匹配用的产物标记 (``<视频名>-<标记>.<扩展名>``) 与扩展名白名单.
-# 只认这些, 是为了不把 ``X-CD2.mkv`` 这类同名前缀的正片一起收进删除清单.
-_PRODUCT_MARKERS: frozenset[str] = frozenset(
-    {"thumb", "poster", "fanart", "extrafanart", "trailer", "banner", "landscape", "logo", "clearlogo", "backdrop"}
-)
-_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tif", ".tiff"}
-)
-_MEDIA_EXTENSIONS: frozenset[str] = _IMAGE_EXTENSIONS | frozenset(
-    {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm", ".flv"}
-)
 
 
 class FootprintNoticeKind(StrEnum):
@@ -204,7 +192,7 @@ def _add_products(
 ) -> None:
     """按路径模板反解刮削产物: 产物位置由模板决定, 与视频文件名没有对应关系.
 
-    模板算出来的产物之外, 再按同名前缀补一层 ``_add_named_siblings``.
+    模板算出来的产物之外, 再按同名前缀补一层 ``_add_name_prefixed_siblings``.
     """
     source = Path(item.path)
     metadata = metas.get(item.metadata_id) if item.metadata_id is not None else None
@@ -229,15 +217,17 @@ def _add_products(
             add(product)
     # 模板之外再补一层同名匹配 (去重交给 add): 没刮过 / 元数据被删 / 模板与实际命名不一致时,
     # 少了这层清单里就只剩正片, 用户会以为产物不归这个功能管.
-    _add_named_siblings(source, add=add)
+    _add_name_prefixed_siblings(source, add=add)
 
 
-def _add_named_siblings(video: Path, *, add: _Add) -> None:
-    """补收同目录里按 ``<视频名>`` 命名的刮削产物 (模板之外的第二条路).
+def _add_name_prefixed_siblings(video: Path, *, add: _Add) -> None:
+    """补收同目录里跟着视频名走的附属文件 (模板之外的第二条路).
 
-    命名约定与 ``_add_subtitles`` 一致 (逐字符前缀), 但只认 ``<视频名>-<标记>`` 且标记在
-    白名单里的形式 —— 只按前缀收会把 ``X-CD2.mkv`` 这类同名前缀正片一起收进来. 命中的
-    条目仍会逐项列给用户确认, 不会静默删除.
+    只认 ``<视频名>.nfo`` 与 ``<视频名>-...`` 两种形式, 破折号后那串不做白名单:
+    ``-CD1`` / ``-PART2`` / ``-A`` / ``-1`` 这类分片按 ``parsing._detect_cd`` 本来就属于
+    同一部片子, ``-thumb.jpg`` / ``-trailer.mp4`` / ``-extrafanart/`` 是刮削产物, 只认
+    产物标记会把分片和同号码的其它版本漏在外面. 破折号保证 ``ABC-12`` 不会命中
+    ``ABC-123``, 命中的条目仍逐项列给用户确认, 不会静默删除.
     """
     stem = video.stem
     try:
@@ -245,15 +235,7 @@ def _add_named_siblings(video: Path, *, add: _Add) -> None:
     except OSError:
         return
     for child in children:
-        if child.name == f"{stem}.nfo":
-            add(child)
-            continue
-        if not child.name.startswith(f"{stem}-"):
-            continue
-        rest = child.name[len(stem) + 1 :]
-        if rest.split(".", 1)[0].lower() not in _PRODUCT_MARKERS:
-            continue
-        if child.is_dir() or child.suffix.lower() in _MEDIA_EXTENSIONS:
+        if child.name == f"{stem}.nfo" or child.name.startswith(f"{stem}-"):
             add(child)
 
 

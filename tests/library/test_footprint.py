@@ -67,7 +67,7 @@ class TestFootprint:
         (video_dir / f"{video_name}.nfo").write_text("nfo")
         for tag in ("thumb", "poster", "fanart"):
             (video_dir / f"{video_name}-{tag}.jpg").write_bytes(b"x")
-        # 同名前缀但属于另一部片子: 前缀兜底不该把它收进删除清单.
+        # 同号分片: 按 parsing._detect_cd 属于同一部片子, 要和正片一起列出.
         (video_dir / f"{video_name}-CD2.mkv").write_bytes(b"x")
 
         lib = await repo.create_library(name="t", path=str(root), write_nfo=True)
@@ -93,6 +93,7 @@ class TestFootprint:
 
         names = sorted(entry.path.name for entry in outcome.inventory.entries)
         assert names == [
+            "START-460-4K.(mkv)-CD2.mkv",
             "START-460-4K.(mkv)-fanart.jpg",
             "START-460-4K.(mkv)-poster.jpg",
             "START-460-4K.(mkv)-thumb.jpg",
@@ -109,6 +110,7 @@ class TestFootprint:
 
         names = sorted(entry.path.name for entry in outcome.inventory.entries)
         assert names == [
+            "START-460-4K.(mkv)-CD2.mkv",
             "START-460-4K.(mkv)-fanart.jpg",
             "START-460-4K.(mkv)-poster.jpg",
             "START-460-4K.(mkv)-thumb.jpg",

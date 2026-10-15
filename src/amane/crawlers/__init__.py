@@ -35,6 +35,7 @@ from .sites import (
     Kin8Crawler,
     MGStageCrawler,
     OfficialCrawler,
+    OfficialUncensoredCrawler,
     PrestigeCrawler,
     R18DevCrawler,
     ThePornDBCrawler,
@@ -65,6 +66,7 @@ registry.register(PrestigeCrawler)
 registry.register(R18DevCrawler)
 registry.register(ThePornDBCrawler)
 registry.register(OfficialCrawler)
+registry.register(OfficialUncensoredCrawler)
 
 # 演员站在 amane.crawlers.actor 导入时注册.
 
@@ -102,6 +104,7 @@ __all__ = [
     "MetadataField",
     "MinnanoActorCrawler",
     "OfficialCrawler",
+    "OfficialUncensoredCrawler",
     "PrestigeCrawler",
     "R18DevCrawler",
     "SiteName",

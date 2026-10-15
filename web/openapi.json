@@ -9176,6 +9176,7 @@
                   "javdb"
                 ],
                 "uncensored": [
+                  "official_uncensored",
                   "javdb",
                   "javbus",
                   "avsox",
@@ -9453,6 +9454,18 @@
                   "use_proxy": true
                 },
                 "official": {
+                  "cookie": {},
+                  "languages": [
+                    "zh",
+                    "ja",
+                    "en"
+                  ],
+                  "official_routes": {},
+                  "rate_limit": 2.0,
+                  "use_browser": "auto",
+                  "use_proxy": true
+                },
+                "official_uncensored": {
                   "cookie": {},
                   "languages": [
                     "zh",
@@ -13909,6 +13922,7 @@
                   "kin8",
                   "mgstage",
                   "official",
+                  "official_uncensored",
                   "prestige",
                   "r18dev",
                   "theporndb",
@@ -13950,6 +13964,7 @@
                   "kin8",
                   "mgstage",
                   "official",
+                  "official_uncensored",
                   "prestige",
                   "r18dev",
                   "theporndb",
@@ -13991,6 +14006,7 @@
                   "kin8",
                   "mgstage",
                   "official",
+                  "official_uncensored",
                   "prestige",
                   "r18dev",
                   "theporndb",
@@ -14279,6 +14295,7 @@
           "mgstage",
           "minnano",
           "official",
+          "official_uncensored",
           "prestige",
           "r18dev",
           "theporndb",

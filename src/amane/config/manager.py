@@ -78,6 +78,7 @@ _DEFAULT_CONTENT_ROUTES: dict[ContentType, list[SiteName]] = {
         SiteName.OFFICIAL,
     ],
     ContentType.UNCENSORED: [
+        SiteName.OFFICIAL_UNCENSORED,
         SiteName.JAVDB,
         SiteName.JAVBUS,
         SiteName.AVSOX,

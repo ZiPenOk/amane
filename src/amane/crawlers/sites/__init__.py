@@ -18,6 +18,7 @@ from .javlibrary import JavLibraryCrawler
 from .kin8 import Kin8Crawler
 from .mgstage import MGStageCrawler
 from .official import OfficialCrawler
+from .official_uncensored import OfficialUncensoredCrawler
 from .prestige import PrestigeCrawler
 from .r18dev import R18DevCrawler
 from .theporndb import ThePornDBCrawler
@@ -44,6 +45,7 @@ __all__ = [
     "Kin8Crawler",
     "MGStageCrawler",
     "OfficialCrawler",
+    "OfficialUncensoredCrawler",
     "PrestigeCrawler",
     "R18DevCrawler",
     "ThePornDBCrawler",

@@ -26,6 +26,7 @@ class SiteName(StrEnum):
     MGSTAGE = "mgstage"
     MINNANO = "minnano"
     OFFICIAL = "official"
+    OFFICIAL_UNCENSORED = "official_uncensored"
     PRESTIGE = "prestige"
     R18DEV = "r18dev"
     THEPORNDB = "theporndb"

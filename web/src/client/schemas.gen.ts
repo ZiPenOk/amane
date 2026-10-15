@@ -2940,6 +2940,7 @@ export const HotSettingsSchema = {
                         'javdb'
                     ],
                     uncensored: [
+                        'official_uncensored',
                         'javdb',
                         'javbus',
                         'avsox',
@@ -3217,6 +3218,18 @@ export const HotSettingsSchema = {
                         use_proxy: true
                     },
                     official: {
+                        cookie: {},
+                        languages: [
+                            'zh',
+                            'ja',
+                            'en'
+                        ],
+                        official_routes: {},
+                        rate_limit: 2,
+                        use_browser: 'auto',
+                        use_proxy: true
+                    },
+                    official_uncensored: {
                         cookie: {},
                         languages: [
                             'zh',
@@ -7763,6 +7776,7 @@ export const ScrapingConfigSchema = {
                         'kin8',
                         'mgstage',
                         'official',
+                        'official_uncensored',
                         'prestige',
                         'r18dev',
                         'theporndb',
@@ -7804,6 +7818,7 @@ export const ScrapingConfigSchema = {
                         'kin8',
                         'mgstage',
                         'official',
+                        'official_uncensored',
                         'prestige',
                         'r18dev',
                         'theporndb',
@@ -7845,6 +7860,7 @@ export const ScrapingConfigSchema = {
                         'kin8',
                         'mgstage',
                         'official',
+                        'official_uncensored',
                         'prestige',
                         'r18dev',
                         'theporndb',
@@ -8138,6 +8154,7 @@ export const SiteNameSchema = {
         'mgstage',
         'minnano',
         'official',
+        'official_uncensored',
         'prestige',
         'r18dev',
         'theporndb',

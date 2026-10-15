@@ -325,6 +325,40 @@ class TestSiteProxy:
         assert cfg.use_proxy is True
 
 
+class TestSiteCookie:
+    """Cookie 既接受逐条 KV, 也接受整条浏览器 Cookie 头 (键值自动拆分)."""
+
+    def test_default_is_empty(self):
+        assert SiteConfig().cookie == {}
+
+    def test_keeps_explicit_pairs(self):
+        assert SiteConfig(cookie={"cf_clearance": "abc", "ageVerified": "true"}).cookie == {
+            "cf_clearance": "abc",
+            "ageVerified": "true",
+        }
+
+    def test_parses_cookie_header(self):
+        cfg = SiteConfig.model_validate({"cookie": "cf_clearance=abc; ageVerified=true"})
+        assert cfg.cookie == {"cf_clearance": "abc", "ageVerified": "true"}
+
+    def test_strips_cookie_prefix_and_spaces(self):
+        cfg = SiteConfig.model_validate({"cookie": "Cookie: a=1;  b=2 ; "})
+        assert cfg.cookie == {"a": "1", "b": "2"}
+
+    @pytest.mark.parametrize("value", [None, ""])
+    def test_blank_becomes_empty(self, value: object):
+        assert SiteConfig.model_validate({"cookie": value}).cookie == {}
+
+    def test_blob_pasted_as_single_key(self):
+        """整串被粘成单个键 (值缺失) 时按 Cookie 头拆分, 而不是报 string_type."""
+        cfg = SiteConfig.model_validate({"cookie": {"cf_clearance=abc; ageVerified=true": None}})
+        assert cfg.cookie == {"cf_clearance": "abc", "ageVerified": "true"}
+
+    def test_non_string_value_still_rejected(self):
+        with pytest.raises(ValidationError):
+            SiteConfig.model_validate({"cookie": {"a": 1}})
+
+
 class TestScrapingPriorityMigration:
     def test_default_priority_reorders_routes(self):
         cfg = ScrapingConfig.model_validate(

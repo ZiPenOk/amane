@@ -5,6 +5,7 @@ import tempfile
 import tomllib
 from copy import copy
 from enum import StrEnum
+from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit
@@ -255,6 +256,19 @@ def _validate_proxy_url(value: str | None) -> str | None:
     return value
 
 
+def _parse_cookie_header(text: str) -> dict[str, str]:
+    """把浏览器复制的 ``Cookie`` 头 (``k=v; k2=v2``) 解析为 dict; 无法解析时返回空 dict."""
+    header = text.strip()
+    if header[:7].lower() == "cookie:":
+        header = header[7:]
+    cookie = SimpleCookie()
+    try:
+        cookie.load(header)
+    except CookieError:
+        return {}
+    return {key: morsel.value for key, morsel in cookie.items()}
+
+
 class SiteConfig(BaseModel):
     base_url: str | None = None
     use_proxy: bool = True
@@ -266,6 +280,31 @@ class SiteConfig(BaseModel):
     browser_backend: BrowserBackendName | None = Field(default=None, json_schema_extra={"x-hidden": True})
     """覆盖 ``network.browser.backend``; 仅在改用浏览器后生效, ``off`` 表示该来源禁用浏览器."""
     cookie: dict[str, str] = {}
+    """请求时附加的 Cookie, 键为名字. 也接受整条 ``Cookie`` 头 (``k=v; k2=v2``), 载入时自动拆分."""
+
+    @field_validator("cookie", mode="before")
+    @classmethod
+    def _coerce_cookie(cls, v: object) -> object:
+        """兼容直接粘贴浏览器 ``Cookie`` 头, 以及整串粘成单个键的常见误填."""
+        if v is None or v == "":
+            return {}
+        if isinstance(v, str):
+            return _parse_cookie_header(v)
+        if isinstance(v, dict):
+            merged: dict[str, Any] = {}
+            for key, value in v.items():
+                if isinstance(value, str) and value:
+                    merged[str(key)] = value
+                elif isinstance(key, str) and "=" in key and value in (None, ""):
+                    expanded = _parse_cookie_header(key)
+                    if expanded:
+                        merged.update(expanded)
+                    else:
+                        merged[key] = value
+                else:
+                    merged[str(key)] = value
+            return merged
+        return v
 
     @field_validator("proxy")
     @classmethod

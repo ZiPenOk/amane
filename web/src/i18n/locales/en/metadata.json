@@ -55,9 +55,9 @@
     "scrape": "Re-scrape",
     "batchScrape": "Batch Re-scrape",
     "batchDelete": "Batch Delete",
-    "confirmBatchDeleteTitle": "Delete selected films?",
-    "confirmBatchDeleteDesc_one": "This will permanently delete the selected films",
-    "confirmBatchDeleteDesc_other": "This will permanently delete the selected films"
+    "confirmBatchDeleteTitle": "Delete selected scraped metadata?",
+    "confirmBatchDeleteDesc_one": "Removes scraped metadata and its links for the selected film. Files on disk and media library records are kept. This cannot be undone",
+    "confirmBatchDeleteDesc_other": "Removes scraped metadata and its links for the selected films. Files on disk and media library records are kept. This cannot be undone"
   },
   "edit": {
     "title": "Edit film"
@@ -289,7 +289,7 @@
   },
   "notFound": "Film not found",
   "invalidId": "Invalid film ID",
-  "confirmDelete": "Delete film #{{id}}? This cannot be undone",
+  "confirmDelete": "Delete scraped metadata for film #{{id}}? Only the metadata and its actor/tag/comment links are removed. Files on disk and the media library record are kept (status goes back to pending). This cannot be undone",
   "empty": "No films",
   "editor": {
     "title": {

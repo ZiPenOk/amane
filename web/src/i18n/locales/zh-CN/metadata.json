@@ -55,8 +55,8 @@
     "scrape": "重新刮削",
     "batchScrape": "批量重新刮削",
     "batchDelete": "批量删除",
-    "confirmBatchDeleteTitle": "删除选中的影片？",
-    "confirmBatchDeleteDesc": "将永久删除选中的影片, 此操作不可撤销"
+    "confirmBatchDeleteTitle": "删除选中的刮削结果？",
+    "confirmBatchDeleteDesc": "将删除选中影片的刮削结果 (元数据与关联), 磁盘文件与媒体库记录都保留。此操作不可撤销"
   },
   "edit": {
     "title": "编辑影片"
@@ -270,7 +270,7 @@
   },
   "notFound": "未找到影片",
   "invalidId": "无效的影片 ID",
-  "confirmDelete": "确定删除影片 #{{id}}？此操作不可撤销",
+  "confirmDelete": "确定删除影片 #{{id}} 的刮削结果吗？只删除元数据与演员/标签/评论关联, 磁盘文件与媒体库记录都保留 (状态回到待刮削)。此操作不可撤销",
   "empty": "暂无影片记录",
   "editor": {
     "title": {

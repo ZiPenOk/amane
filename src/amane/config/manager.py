@@ -605,6 +605,18 @@ class SrConfig(BaseModel):
     tta: bool = Field(default=False, json_schema_extra={"x-hidden": True})
 
 
+class CompressConfig(BaseModel):
+    """下载图的压缩规则. 作用于资源原图, 整理复制出去的图随之变小."""
+
+    enabled: bool = False
+
+    max_dim: int = Field(default=1100, ge=64, le=8192)
+    """长边超过此值时等比缩小."""
+
+    quality: int = Field(default=80, ge=1, le=100)
+    """重编码质量 (JPEG / WEBP)."""
+
+
 PROMPT_MAX_LENGTH = 2000
 """单条提示词长度上限, 避免超长文本撑大 TOML 与设置表单."""
 
@@ -788,6 +800,7 @@ class HotSettings(BaseModel):
     agent: AgentConfig = AgentConfig()
     network: NetworkConfig = NetworkConfig()
     sr: SrConfig = SrConfig()
+    compress: CompressConfig = CompressConfig()
     watermark: WatermarkConfig = WatermarkConfig()
     llm: LLMConfig = LLMConfig()
     r18: R18Config = R18Config()

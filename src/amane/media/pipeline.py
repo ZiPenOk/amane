@@ -11,6 +11,7 @@ import structlog
 
 from ..config import DownloadableResource
 from ..sr import get_preset_meta, run_SR
+from .compress import compress_image
 from .images import (
     crop_box,
     crop_poster,
@@ -23,7 +24,7 @@ from .images import (
 from .resource_store import RESOURCE_URL_PREFIX
 
 if TYPE_CHECKING:
-    from ..config import HotSettings, SrConfig
+    from ..config import CompressConfig, HotSettings, SrConfig
     from ..db.models import Resource
     from ..net.http import WebClient
     from .resource_store import ResourceStore
@@ -54,6 +55,10 @@ def sr_args_dict(cfg: SrConfig) -> dict:
     return {"preset": cfg.preset, "tool": pm.tool, "model": pm.model, "scale": pm.scale}
 
 
+def compress_args_dict(cfg: CompressConfig) -> dict:
+    return {"max_dim": cfg.max_dim, "quality": cfg.quality}
+
+
 async def _maybe_upscale(
     store: ResourceStore,
     resource: Resource,
@@ -78,6 +83,21 @@ async def _maybe_upscale(
         return result.success
 
     await store.upscale_in_place(resource, sr_args_dict(config.sr), producer)
+
+
+async def _maybe_compress(
+    store: ResourceStore,
+    resource: Resource,
+    config: HotSettings,
+) -> None:
+    """压缩跟在超分之后: 顺序反了会被下一次超分放大回去."""
+    if not config.compress.enabled:
+        return
+
+    async def producer(src: Path, out: Path) -> bool:
+        return await compress_image(src, out, config.compress)
+
+    await store.compress_in_place(resource, compress_args_dict(config.compress), producer)
 
 
 async def materialize_images(
@@ -112,6 +132,7 @@ async def materialize_images(
                     res = await store.get_by_url(url)
                     if res:
                         await _maybe_upscale(store, res, config, data_dir)
+                        await _maybe_compress(store, res, config)
 
     # 下载 poster; 候选偏矮则从 thumb 裁剪.
     poster_ok: set[str] = set()
@@ -151,6 +172,7 @@ async def materialize_images(
             crop_res = await store.acquire_derived(thumb_src or "", "crop", args, crop_producer)
             if crop_res:
                 await _maybe_upscale(store, crop_res, config, data_dir)
+                await _maybe_compress(store, crop_res, config)
                 result_poster_urls = [_internal_url(store, crop_res.url)]
             else:
                 result_poster_urls = _success_first(poster_urls, poster_ok)
@@ -161,6 +183,7 @@ async def materialize_images(
                     res = await store.get_by_url(url)
                     if res:
                         await _maybe_upscale(store, res, config, data_dir)
+                        await _maybe_compress(store, res, config)
                         break
 
     # 下载预告片.
@@ -226,4 +249,5 @@ async def manual_crop_image(
         raise ValueError("裁切失败")
 
     await _maybe_upscale(store, crop_res, config, data_dir)
+    await _maybe_compress(store, crop_res, config)
     return _internal_url(store, crop_res.url)

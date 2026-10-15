@@ -9,6 +9,7 @@
     "watcher": "文件监控",
     "logging": "日志",
     "sr": "图像超分",
+    "compress": "图片压缩",
     "llm": "LLM 翻译",
     "watermark": "水印"
   },
@@ -578,6 +579,20 @@
       "tta": {
         "label": "启用 TTA (测试时增强)",
         "description": "略微提升画质但耗时 x8"
+      }
+    },
+    "compress": {
+      "enabled": {
+        "label": "刮削时压缩",
+        "description": "把下载到的图片就地缩小并按质量重编码"
+      },
+      "max_dim": {
+        "label": "长边上限",
+        "description": "长边超过此值时等比缩小"
+      },
+      "quality": {
+        "label": "质量",
+        "description": "JPEG / WebP 的重编码质量"
       }
     },
     "logging": {

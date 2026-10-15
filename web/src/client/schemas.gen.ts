@@ -1422,6 +1422,33 @@ export const CommentUpdateRequestSchema = {
     title: 'CommentUpdateRequest'
 } as const;
 
+export const CompressConfigSchema = {
+    properties: {
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled',
+            default: false
+        },
+        max_dim: {
+            type: 'integer',
+            maximum: 8192,
+            minimum: 64,
+            title: 'Max Dim',
+            default: 1100
+        },
+        quality: {
+            type: 'integer',
+            maximum: 100,
+            minimum: 1,
+            title: 'Quality',
+            default: 80
+        }
+    },
+    type: 'object',
+    title: 'CompressConfig',
+    description: '下载图的压缩规则. 作用于资源原图, 整理复制出去的图随之变小.'
+} as const;
+
 export const ConnectivityCheckRequestSchema = {
     properties: {
         source_ids: {
@@ -3323,6 +3350,14 @@ export const HotSettingsSchema = {
                 preset: 'waifu-photo-2x',
                 output_format: 'jpg',
                 tta: false
+            }
+        },
+        compress: {
+            $ref: '#/components/schemas/CompressConfig',
+            default: {
+                enabled: false,
+                max_dim: 1100,
+                quality: 80
             }
         },
         watermark: {

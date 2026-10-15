@@ -53,7 +53,7 @@
 
 **adult.contents.fc2.com** — 官方 FC2 电子市场, 商品 ID 纯数字; 元数据偏卖家自填, 但属第一方, 置于 javdb / fc2ppvdb 之后.
 
-**fc2ppvdb.com** — FC2 专用索引, 可能被 Cloudflare Access denied; 拦截后回退后续源.
+**fc2cmadb.com** — FC2 专用索引 (原 fc2ppvdb.com, 旧域名被 Cloudflare 拦成 403). 详情页是 Inertia 应用, 正文在 `data-page` 的 JSON 里; 演员是延迟属性, 需带 `X-Inertia-Version` 再请求一次.
 
 **fc2club.top** — 打开后跳转镜像, 不稳定, 不纳入默认表.
 

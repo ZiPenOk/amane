@@ -1,3 +1,4 @@
+from .compress import compress_image
 from .images import (
     apply_cover_watermarks,
     apply_cover_watermarks_from_info,
@@ -11,15 +12,17 @@ from .images import (
 )
 from .nfo import write_nfo
 from .pipeline import MaterializedImages, manual_crop_image, materialize_images
-from .resource_store import AcquireResult, ResourceStore, UpscaleOutcome, derived_locator
+from .resource_store import AcquireResult, CompressOutcome, ResourceStore, UpscaleOutcome, derived_locator
 
 __all__ = [
     "AcquireResult",
+    "CompressOutcome",
     "MaterializedImages",
     "ResourceStore",
     "UpscaleOutcome",
     "apply_cover_watermarks",
     "apply_cover_watermarks_from_info",
+    "compress_image",
     "crop_box",
     "crop_poster",
     "derived_locator",

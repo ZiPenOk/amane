@@ -9,6 +9,7 @@
     "watcher": "File Monitoring",
     "logging": "Logging",
     "sr": "Super Resolution",
+    "compress": "Image compression",
     "llm": "LLM Translation",
     "watermark": "Watermark"
   },
@@ -578,6 +579,20 @@
       "tta": {
         "label": "Enable TTA (test-time augmentation)",
         "description": "Slightly better quality but 8x slower"
+      }
+    },
+    "compress": {
+      "enabled": {
+        "label": "Compress on scrape",
+        "description": "Shrink and re-encode oversized downloaded images in place"
+      },
+      "max_dim": {
+        "label": "Max long side",
+        "description": "Scale down proportionally when the long side exceeds this value"
+      },
+      "quality": {
+        "label": "Quality",
+        "description": "Re-encode quality for JPEG / WebP"
       }
     },
     "logging": {

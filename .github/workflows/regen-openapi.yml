@@ -1,0 +1,63 @@
+name: Regenerate OpenAPI artifacts
+
+# 生成产物 (web/openapi.json 与 web/src/client) 是提交进仓库的, 改了后端 schema 就会漂移;
+# CI 的 _check-openapi 会因此失败. 这里用固定工具链重跑生成器并把结果提交回当前分支.
+on:
+  # 手动触发: 改了后端 schema 后跑一次, 由它提交生成产物.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: "24"
+  PNPM_VERSION: "11"
+
+jobs:
+  regen:
+    name: regenerate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Setup just
+        uses: extractions/setup-just@v4
+
+      - name: Sync deps
+        run: |
+          uv sync --frozen --all-extras --dev
+          cd web && pnpm install --frozen-lockfile
+
+      - name: Generate
+        run: just generate
+
+      - name: Commit drift
+        run: |
+          git add -A web/openapi.json web/src/client
+          if git diff --cached --quiet; then
+            echo "生成产物无变化"
+            exit 0
+          fi
+          git diff --cached --stat
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(web): 重新生成 OpenAPI 产物"
+          git push
+

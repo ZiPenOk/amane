@@ -22,6 +22,17 @@
 
 **所有影响远程仓库的变更必须经用户明确批准后才能执行.** 例如 push、合并 PR、回复 Issue、发表评论.
 
+例外: 本仓库是 `ZiPenOk/amane` (fork), 按 [`FORK.md`](FORK.md) 规定的流程推送**本 fork** (`origin`)
+以及触发本 fork 的 Actions 属于用户既有约定, 不必逐次确认; 对上游 `sqzw-x/amane` 的任何写操作仍需逐次批准.
+
+## 本 fork 的约定
+
+这是 `ZiPenOk/amane`, fork 自 `sqzw-x/amane`, 带着自用功能 (图片压缩、fc2cmadb 数据源、自己的镜像构建).
+
+分支布局: `main` 是纯上游 (只前移, 永不在上面提交), `dev` 是带自用功能的工作分支, 也是本 fork 的默认分支 —— 日常提交与构建都在 `dev`.
+**同步上游、改 workflow、碰生成产物 (`web/openapi.json` / `web/src/client`) 之前先读 [`FORK.md`](FORK.md)**,
+那里规定了同步流程、冲突规则、本地检查清单与构建部署方式.
+
 ## 代码知识库
 
 位置: `docs/dev/` — 导航见 [`docs/dev/index.md`](docs/dev/index.md).

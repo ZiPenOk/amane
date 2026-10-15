@@ -1,4 +1,4 @@
-"""就地超分低质图. 跳过判据是 ``meta`` 的 sr 标记且磁盘仍是记录的那份字节 (覆盖原文件, URL 不变).
+"""就地超分与压缩资源图. 跳过判据是 ``meta`` 标记且磁盘仍是记录的那份字节 (覆盖原文件, URL 不变).
 单个失败不阻断整批.
 """
 
@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 import structlog
 
-from ..media import UpscaleOutcome, needs_upscale, probe_size
-from ..media.pipeline import sr_args_dict
+from ..media import CompressOutcome, UpscaleOutcome, compress_image, needs_upscale, probe_size
+from ..media.pipeline import compress_args_dict, sr_args_dict
 from ..sr import run_SR
 from .models import UpscalePayload, UpscaleResult
 from .protocol import TaskHandler, TaskResult
@@ -39,15 +39,19 @@ class UpscaleHandler(TaskHandler[UpscalePayload, UpscaleResult]):
         result = await run_SR(src, out, self._config.sr, self._store.data_dir)
         return result.success
 
+    async def _compress_producer(self, src: Path, out: Path) -> bool:
+        return await compress_image(src, out, self._config.compress)
+
     async def handle(self, payload: UpscalePayload) -> TaskResult[UpscaleResult]:
         max_dim = payload.max_dim_threshold or self._config.sr.max_dim_threshold
         max_bytes = payload.max_bytes_threshold or self._config.sr.max_bytes_threshold
 
         resources = await self._store.list_all()
-        scanned = upscaled = skipped = failed = 0
+        scanned = upscaled = compressed = skipped = failed = 0
 
         for res in resources:
-            if upscaled >= payload.limit:
+            # 两种处理共用 limit: 都算处理过一张, 避免单次任务长时间占用 worker.
+            if upscaled + compressed >= payload.limit:
                 break
             scanned += 1
 
@@ -58,21 +62,41 @@ class UpscaleHandler(TaskHandler[UpscalePayload, UpscaleResult]):
             full = self._store.full_path(res)
             size = probe_size(full)
             file_bytes = full.stat().st_size if full.exists() else 0
+            handled = False
+
             # 超分处的判据是标记加盘上字节; 已超分的图尺寸已达阈值, 在此跳过.
-            if not needs_upscale(size, file_bytes, max_dim_threshold=max_dim, max_bytes_threshold=max_bytes):
-                skipped += 1
-                continue
+            if needs_upscale(size, file_bytes, max_dim_threshold=max_dim, max_bytes_threshold=max_bytes):
+                # 存量标记与盘上字节不一致的行照常进入超分, 由锁内判据决定重跑或跳过.
+                outcome = await self._store.upscale_in_place(res, sr_args_dict(self._config.sr), self._sr_producer)
+                if outcome is UpscaleOutcome.UPSCALED:
+                    upscaled += 1
+                    handled = True
+                elif outcome is UpscaleOutcome.FAILED:
+                    failed += 1
+                    handled = True
 
-            # 存量标记与盘上字节不一致的行照常进入超分, 由锁内判据决定重跑或跳过.
-            outcome = await self._store.upscale_in_place(res, sr_args_dict(self._config.sr), self._sr_producer)
-            if outcome is UpscaleOutcome.UPSCALED:
-                upscaled += 1
-            elif outcome is UpscaleOutcome.FAILED:
-                failed += 1
-            else:
+            # 压缩只认自己的标记: 关掉超分也能靠这个任务补存量图.
+            if self._config.compress.enabled:
+                args = compress_args_dict(self._config.compress)
+                compressed_outcome = await self._store.compress_in_place(res, args, self._compress_producer)
+                if compressed_outcome is CompressOutcome.COMPRESSED:
+                    compressed += 1
+                    handled = True
+                elif compressed_outcome is CompressOutcome.FAILED:
+                    failed += 1
+                    handled = True
+
+            if not handled:
                 skipped += 1
 
-        logger.info("upscale completed", scanned=scanned, upscaled=upscaled, skipped=skipped, failed=failed)
+        logger.info(
+            "upscale completed",
+            scanned=scanned,
+            upscaled=upscaled,
+            compressed=compressed,
+            skipped=skipped,
+            failed=failed,
+        )
         return TaskResult(
             success=failed == 0,
             result=UpscaleResult(scanned=scanned, upscaled=upscaled, skipped=skipped, failed=failed),

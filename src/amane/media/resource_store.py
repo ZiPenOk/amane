@@ -100,6 +100,18 @@ class UpscaleOutcome(StrEnum):
     FAILED = "failed"
 
 
+class CompressOutcome(StrEnum):
+    """``SKIPPED`` 含「参数与盘上一致, 无需重跑」, 调用方不应计作失败."""
+
+    COMPRESSED = "compressed"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+_COMPRESS_TAG = "compress"
+"""``meta`` 里的压缩标记; 与超分的 ``sr`` 各记各的, 互不覆盖."""
+
+
 class ResourceStore:
     def __init__(self, engine: AsyncEngine, base_dir: Path):
         self._engine = engine
@@ -373,6 +385,62 @@ class ResourceStore:
                 await session.commit()
             return UpscaleOutcome.UPSCALED
 
+    async def compress_in_place(
+        self,
+        resource: Resource,
+        args: dict,
+        producer: Callable[[Path, Path], Awaitable[bool]],
+    ) -> CompressOutcome:
+        """就地压缩; 与 ``upscale_in_place`` 各记各的标记, 互不覆盖.
+
+        跳过判据是记录里的参数与字节都与盘上一致, 因此改了参数重跑即可生效.
+        """
+        async with self._serialized(resource.url):
+            # 调用方的 Resource 可能已过期 (并发调用刚改过), 标记与哈希一律按锁内重读的行判定.
+            async with self._session() as session:
+                result = await session.exec(select(Resource).where(Resource.url == resource.url))
+                record = result.first()
+            if record is None:
+                return CompressOutcome.SKIPPED
+            src = self._base_dir / record.file_path
+            if not src.exists():
+                logger.warning("compress source missing", url=record.url, path=str(src))
+                return CompressOutcome.SKIPPED
+
+            # 临时文件按调用命名: 同一路径的并发压缩不共用半截文件.
+            tmp = src.with_name(f"{src.stem}.{uuid4().hex}.compress_tmp{src.suffix}")
+            try:
+                if self._compressed_matches(src, record, args):
+                    return CompressOutcome.SKIPPED
+                ok = await producer(src, tmp)
+                if not ok or not tmp.exists():
+                    logger.warning("compress producer failed", url=record.url)
+                    return CompressOutcome.FAILED
+                tmp.replace(src)
+            except Exception as exc:
+                logger.warning("compress in place error", url=record.url, error=str(exc))
+                return CompressOutcome.FAILED
+            finally:
+                tmp.unlink(missing_ok=True)
+
+            # 原地替换后重新量取, 记入的就是盘上那份.
+            size = src.stat().st_size
+            content_hash = self._hash_file(src)
+            new_meta = dict(record.meta) if record.meta else {}
+            new_meta[_COMPRESS_TAG] = {"args": args, "hash": content_hash, "size": size}
+
+            async with self._session() as session:
+                result = await session.exec(select(Resource).where(Resource.url == record.url))
+                row = result.first()
+                if row is None:
+                    return CompressOutcome.SKIPPED
+                row.size = size
+                row.content_hash = content_hash
+                row.meta = new_meta
+                session.add(row)
+                await session.commit()
+            return CompressOutcome.COMPRESSED
+
     async def acquire_first(self, urls: list[str], client: WebClient) -> AcquireResult:
         if not urls:
             return AcquireResult(success=False, failed=[])
@@ -444,3 +512,15 @@ class ResourceStore:
         if path.stat().st_size != record.size:
             return False
         return self._hash_file(path) == record.content_hash
+
+    def _compressed_matches(self, path: Path, record: Resource, args: dict) -> bool:
+        """参数与字节都一致才算已压缩: 改了参数要按新规则重跑, 不必手工清标记."""
+        marked = (record.meta or {}).get(_COMPRESS_TAG)
+        if not isinstance(marked, dict) or marked.get("args") != args:
+            return False
+        expected_size = marked.get("size")
+        if expected_size is None or not path.exists():
+            return False
+        if path.stat().st_size != expected_size:
+            return False
+        return self._hash_file(path) == marked.get("hash")

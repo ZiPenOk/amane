@@ -812,6 +812,26 @@ export type CommentUpdateRequest = {
 };
 
 /**
+ * CompressConfig
+ *
+ * 下载图的压缩规则. 作用于资源原图, 整理复制出去的图随之变小.
+ */
+export type CompressConfig = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Max Dim
+     */
+    max_dim?: number;
+    /**
+     * Quality
+     */
+    quality?: number;
+};
+
+/**
  * ConnectivityCheckRequest
  *
  * 缺省或空 ``source_ids`` = 探测当前配置真正会请求的全部来源.
@@ -1675,6 +1695,7 @@ export type HotSettings = {
     agent?: AgentConfig;
     network?: NetworkConfig;
     sr?: SrConfig;
+    compress?: CompressConfig;
     watermark?: WatermarkConfig;
     llm?: LlmConfig;
     r18?: R18Config;

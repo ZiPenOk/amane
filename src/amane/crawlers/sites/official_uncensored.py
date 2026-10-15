@@ -147,6 +147,20 @@ def _iso8601_to_minutes(value: object) -> int | None:
     return total or (1 if int(match.group("seconds") or 0) > 0 else None)
 
 
+def split_edge_marker(value: str) -> tuple[str | None, str]:
+    """剥掉写在番号前/后的站点名 (``10MU-101526_01`` / ``101526_01-10MU``).
+
+    返回 (站点别名, 余下番号); 前后都写时以更靠近编号的那次为准.
+    """
+    out = value
+    marker: str | None = None
+    if m := re.match(rf"^({_SITE_ALIASES})[-_ ]+", out, re.IGNORECASE):
+        marker, out = m.group(1).lower(), out[m.end() :]
+    if m := re.search(rf"[-_ ]+({_SITE_ALIASES})$", out, re.IGNORECASE):
+        marker, out = m.group(1).lower(), out[: m.start()]
+    return marker, out
+
+
 def route_site(number: str) -> UncensoredOfficialSite | None:
     """番号 → 站点; 认不出返回 ``None`` (交给别的来源)."""
     value = (number or "").strip().lower().replace(" ", "")
@@ -154,10 +168,14 @@ def route_site(number: str) -> UncensoredOfficialSite | None:
         return None
     if HEYZO_NUMBER.fullmatch(value):
         return "heyzo"
+    # 写了站点名就以它为准: 只看余下番号的分隔符会把 ``101526_01-paco`` 判成 10Musume.
+    marker, rest = split_edge_marker(value)
+    if marker is not None and DIGIT_NUMBER.fullmatch(rest):
+        return PREFIX_ALIASES[marker]
     if prefixed := PREFIXED_DIGIT_NUMBER.fullmatch(value):
         return PREFIX_ALIASES[prefixed.group("prefix").lower()]
-    if bare := DIGIT_NUMBER.fullmatch(value):
-        # 无前缀时按分隔符归属: Caribbeancom 用 "-", 1Pondo 系列用 "_".
+    if bare := DIGIT_NUMBER.fullmatch(rest):
+        # 没有站点名时按分隔符归属: Caribbeancom 用 '-', 1Pondo 系列用 '_'.
         if bare.group("sep") == "-":
             return "caribbeancom"
         tail = bare.group("tail")
@@ -170,6 +188,7 @@ def route_site(number: str) -> UncensoredOfficialSite | None:
 def movie_id(number: str) -> str:
     """番号 → 官网 movie_id (保留原分隔符); 认不出时退回去掉首尾符号的原文."""
     value = (number or "").strip().lower().replace(" ", "")
+    _marker, value = split_edge_marker(value)
     for pattern in (HEYZO_NUMBER, DIGIT_NUMBER, PREFIXED_DIGIT_NUMBER):
         if match := pattern.fullmatch(value):
             if "id" in match.groupdict():

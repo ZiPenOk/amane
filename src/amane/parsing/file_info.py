@@ -435,11 +435,26 @@ def _identify(
     return _fallback(stem, escape)
 
 
+# 无码官网 (Caribbeancom / 1Pondo / Pacopacomama / 10Musume) 的站点名会出现在番号前后:
+# ``10MU-101526_01`` / ``101526_01-10MU`` / ``1pondo-093024_001`` 都是同一个 id.
+_UNCENSORED_OFFICIAL_MARKER = r"(?:10MUSUME|10MU|1PONDO|1PON|PACOPACOMAMA|PACOMA|PACO|CARIBBEANCOM|CARIB)"
+_UNCENSORED_OFFICIAL_NUMBER = re.compile(
+    rf"^(?:{_UNCENSORED_OFFICIAL_MARKER}[-_ ]*)?"
+    r"(?P<head>\d{6})(?P<sep>[-_])(?P<tail>\d{2,4})"
+    rf"(?:[-_ ]*{_UNCENSORED_OFFICIAL_MARKER})?$",
+    re.IGNORECASE,
+)
+
+
 def _match(basename: str, escape_strings: list[str], *, generic: bool) -> tuple[str, ContentType] | None:
     """命中已知形态则 (番号, 类型), 否则 None. 不含文件名回退."""
     t = _prepare(basename, escape_strings)
     c, escaped, dated = t.catalog, t.escaped, t.dated
 
+    # 站点名是前后缀时先归一: 否则 ``101526_01-10MU`` 会落到文件名回退被当成欧美.
+    # 必须用 dated —— catalog 已把开头的 6 位日期剥掉, 那样只剩 ``10MU``.
+    if m := _UNCENSORED_OFFICIAL_NUMBER.fullmatch(dated):
+        return f"{m['head']}{m['sep']}{m['tail']}", ContentType.UNCENSORED
     if "MYWIFE" in c and re.search(r"NO\.\d*", c):
         return f"Mywife No.{re.findall(r'NO\.(\d*)', c)[0]}", ContentType.CENSORED
     if m := re.search(r"CW3D2D?BD-?\d{2,}", c):

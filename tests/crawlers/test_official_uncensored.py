@@ -32,6 +32,13 @@ from amane.crawlers.sites.official_uncensored import (
         ("10mu-010115-02", "10musume", "010115-02"),
         ("carib-010115-001", "caribbeancom", "010115-001"),
         ("paco_010115_123", "pacopacomama", "010115_123"),
+        # 站点名写在番号后面 (存量索引里的形态) 也要认得
+        ("101526_01-10MU", "10musume", "101526_01"),
+        ("10MU-101526_01", "10musume", "101526_01"),
+        ("101526_01-paco", "pacopacomama", "101526_01"),
+        ("093024_001-1pondo", "1pondo", "093024_001"),
+        ("121315-001-carib", "caribbeancom", "121315-001"),
+        ("10MU-101526_01-10MU", "10musume", "101526_01"),
         ("SSIS-001", None, "ssis-001"),
         ("FC2-1234567", None, "fc2-1234567"),
     ],

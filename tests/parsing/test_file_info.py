@@ -118,6 +118,12 @@ CASES: list[object] = [
     _Case("120115_318-mura-1440p.mp4", definition="1440p", mosaic="uncensored", number="120115_318"),
     _Case("120115_318-mura-480p.mp4", definition="480p", mosaic="uncensored", number="120115_318"),
     _Case("112912_776-mura-whole1_hd.wmv", definition="HD", mosaic="uncensored", number="112912_776"),
+    # 无码官网的站点名写在番号前/后: 归一成 6 位日期号, 类型判无码
+    _Case("101526_01-10MU.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
+    _Case("10MU-101526_01.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
+    _Case("1pondo-093024_001.mp4", mosaic="uncensored", number="093024_001", content_type=ContentType.UNCENSORED),
+    _Case("101526_01-paco.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
+    _Case("121315-001-carib.mp4", mosaic="uncensored", number="121315-001", content_type=ContentType.UNCENSORED),
     # 分集 + 分辨率
     _Case("MIDV-123-4K-CD1.mp4", cd=1, definition="4K", number="MIDV-123"),
     # --- 分辨率误报: 番号/编码里的字母数字不当作独立标记 ---

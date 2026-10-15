@@ -33,6 +33,7 @@ git log --oneline main..dev
 | fc2cmadb 数据源 | `src/amane/crawlers/sites/fc2ppvdb.py` | 上游若同时改这个站点, 冲突必须人工判断 |
 | 站点 Cookie 兼容 | `src/amane/config/manager.py` (`SiteConfig.cookie`) | 上游 `SiteConfig` 内加了 `mode="before"` 校验器直接吃 `Cookie` 头; 上游改这个类时人工合并 |
 | 预览图不落盘开关 | `src/amane/api/routes/resources.py` + `ScrapingConfig.cache_preview_images` | 上游改 `ScrapingConfig` / 资源路由时人工合并 |
+| 删除清单补收同名前缀产物 | `src/amane/library/cleanup/footprint.py` | 上游改 `build_footprint` / `_add_products` 时人工合并 |
 | 自己的镜像构建 | `.github/workflows/build-mine.yml` | 独立文件, 不与上游冲突 |
 | 生成产物重跑 | `.github/workflows/regen-openapi.yml` | 本地跑不了 `pnpm` 时的兜底: Actions 里手动 Run workflow |
 

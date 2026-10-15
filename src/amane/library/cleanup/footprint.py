@@ -1,6 +1,7 @@
 """显式来源的清单展开: 由选中项求出该作品的完整足迹.
 
 删除文件 = 媒体文件自身 + 按库路径模板反解出的刮削产物 + 同目录同名字幕;
+模板产物之外, 再按视频名前缀补收同目录的 nfo / 图 / 预告片 (见 _add_named_siblings);
 删除文件与作品文件夹 = 该作品文件夹下的全部内容, 只在该目录仅含这一条媒体索引且不是库根时提供.
 展开只收库根内的路径: 配置链接模板时产物落在库外的链接树, 那些不归本功能管;
 工作目录里的目录链接 (Windows 的 junction 与挂载点) 同样不展开, 它由用户布置.
@@ -38,7 +39,20 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
-_Add = Callable[[Path], None]
+_Add = Callable[[Path], bool]
+"""往清单里加一条; 返回它是否真的进了清单 (不存在 / 库外 / 触顶都是 False)."""
+
+# 兜底匹配用的产物标记 (``<视频名>-<标记>.<扩展名>``) 与扩展名白名单.
+# 只认这些, 是为了不把 ``X-CD2.mkv`` 这类同名前缀的正片一起收进删除清单.
+_PRODUCT_MARKERS: frozenset[str] = frozenset(
+    {"thumb", "poster", "fanart", "extrafanart", "trailer", "banner", "landscape", "logo", "clearlogo", "backdrop"}
+)
+_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
+    {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tif", ".tiff"}
+)
+_MEDIA_EXTENSIONS: frozenset[str] = _IMAGE_EXTENSIONS | frozenset(
+    {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".ts", ".m2ts", ".webm", ".flv"}
+)
 
 
 class FootprintNoticeKind(StrEnum):
@@ -93,34 +107,35 @@ def build_footprint(
         Counter(path_key(Path(item.path).parent) for item in indexed) if include_work_dir else {}
     )
 
-    def add(path: Path, *, indexed_file: bool = False) -> None:
+    def add(path: Path, *, indexed_file: bool = False) -> bool:
         nonlocal dropped
         # 去重按比较键: 逐条目两两比较在万级规模下是平方.
         key = path_key(path)
         if key in seen:
-            return
+            return False
         seen.add(key)
         disk = existing_disk_path(path, follow_symlinks=False)
         if disk is None:
             notices.append(FootprintNotice(FootprintNoticeKind.MISSING, path=path))
-            return
+            return False
         if not path_is_under(disk, root):
             if indexed_file:
                 # 索引里的文件本该在库根内: 落在这里说明库路径与索引写法不一致 (旧库的符号链接别名).
                 notices.append(FootprintNotice(FootprintNoticeKind.OUTSIDE_ROOT, path=disk))
             # 模板产物落在库外链接树是正常的, 那些不归本功能管.
-            return
+            return False
         try:
             entry = _entry(disk)
         except OSError:
             # 存在性检查与 stat 之间文件消失, 或挂载盘掉线: 与不在磁盘上同样是这次展开拿不到.
             notices.append(FootprintNotice(FootprintNoticeKind.MISSING, path=path))
-            return
+            return False
         # 上限判断放在这里: 只有真会进清单的路径才算「未纳入」, 库外产物与不存在的路径不计入.
         if len(entries) >= limit:
             dropped += 1
-            return
+            return False
         entries.append(entry)
+        return True
 
     for item in items:
         add(Path(item.path), indexed_file=True)
@@ -187,27 +202,59 @@ def _add_products(
     add: _Add,
     notices: list[FootprintNotice],
 ) -> None:
-    """按路径模板反解刮削产物: 产物位置由模板决定, 与视频文件名没有对应关系."""
-    metadata = metas.get(item.metadata_id) if item.metadata_id is not None else None
-    if metadata is None:
-        return
+    """按路径模板反解刮削产物: 产物位置由模板决定, 与视频文件名没有对应关系.
+
+    模板算出来的产物之外, 再按同名前缀补一层 ``_add_named_siblings``.
+    """
     source = Path(item.path)
-    try:
-        paths = resolve_paths(
-            library,
-            metadata,
-            ext=source.suffix.lstrip("."),
-            source_path=source,
-            file_info=parse_file_info(item.path),
-            safe_dirs=None,
-        )
-    except ValueError as exc:
-        notices.append(FootprintNotice(FootprintNoticeKind.TEMPLATE_ERROR, path=source, detail=str(exc)))
-        return
-    for product in (paths.nfo, paths.thumb, paths.poster, paths.fanart, paths.trailer, paths.extrafanart_dir):
-        # 模板产物本来就可能没写过, 只收磁盘上已有的, 缺失不值得提示.
+    metadata = metas.get(item.metadata_id) if item.metadata_id is not None else None
+    products: tuple[Path, ...] = ()
+    if metadata is not None:
+        try:
+            paths = resolve_paths(
+                library,
+                metadata,
+                ext=source.suffix.lstrip("."),
+                source_path=source,
+                file_info=parse_file_info(item.path),
+                safe_dirs=None,
+            )
+        except ValueError as exc:
+            notices.append(FootprintNotice(FootprintNoticeKind.TEMPLATE_ERROR, path=source, detail=str(exc)))
+        else:
+            products = (paths.nfo, paths.thumb, paths.poster, paths.fanart, paths.trailer, paths.extrafanart_dir)
+    # 模板产物本来就可能没写过, 只收磁盘上已有的, 缺失不值得提示.
+    for product in products:
         if existing_disk_path(product, follow_symlinks=False) is not None:
             add(product)
+    # 模板之外再补一层同名匹配 (去重交给 add): 没刮过 / 元数据被删 / 模板与实际命名不一致时,
+    # 少了这层清单里就只剩正片, 用户会以为产物不归这个功能管.
+    _add_named_siblings(source, add=add)
+
+
+def _add_named_siblings(video: Path, *, add: _Add) -> None:
+    """补收同目录里按 ``<视频名>`` 命名的刮削产物 (模板之外的第二条路).
+
+    命名约定与 ``_add_subtitles`` 一致 (逐字符前缀), 但只认 ``<视频名>-<标记>`` 且标记在
+    白名单里的形式 —— 只按前缀收会把 ``X-CD2.mkv`` 这类同名前缀正片一起收进来. 命中的
+    条目仍会逐项列给用户确认, 不会静默删除.
+    """
+    stem = video.stem
+    try:
+        children = list(video.parent.iterdir())
+    except OSError:
+        return
+    for child in children:
+        if child.name == f"{stem}.nfo":
+            add(child)
+            continue
+        if not child.name.startswith(f"{stem}-"):
+            continue
+        rest = child.name[len(stem) + 1 :]
+        if rest.split(".", 1)[0].lower() not in _PRODUCT_MARKERS:
+            continue
+        if child.is_dir() or child.suffix.lower() in _MEDIA_EXTENSIONS:
+            add(child)
 
 
 def _add_subtitles(library: Library, video: Path, *, add: _Add) -> None:

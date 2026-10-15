@@ -54,6 +54,68 @@ class TestFootprint:
         assert all(entry.reason is InventoryReason.EXPLICIT for entry in outcome.inventory.entries)
         assert video.exists()
 
+    async def _seed_prefix_products(self, repo: Repository, tmp_path: Path, *, with_meta: bool):
+        """同目录里放着 ``<视频名>-<标记>`` 形式的产物; 可造有/无元数据两种索引."""
+        from amane.db.models import MediaFileStatus
+
+        root = tmp_path / "lib"
+        video_dir = root / "123"
+        video_dir.mkdir(parents=True, exist_ok=True)
+        video_name = "START-460-4K.(mkv)"
+        video = video_dir / f"{video_name}.strm"
+        video.write_text("/src/START-460.mkv")
+        (video_dir / f"{video_name}.nfo").write_text("nfo")
+        for tag in ("thumb", "poster", "fanart"):
+            (video_dir / f"{video_name}-{tag}.jpg").write_bytes(b"x")
+        # 同名前缀但属于另一部片子: 前缀兜底不该把它收进删除清单.
+        (video_dir / f"{video_name}-CD2.mkv").write_bytes(b"x")
+
+        lib = await repo.create_library(name="t", path=str(root), write_nfo=True)
+        assert lib.id is not None
+        metas = {}
+        metadata_id = None
+        if with_meta:
+            meta = await repo.upsert_metadata(number="START-460")
+            assert meta.id is not None
+            metadata_id = meta.id
+            metas[meta.id] = meta
+        item = await repo.create_media_file(
+            lib.id, path=str(video), number="START-460", status=MediaFileStatus.PENDING, metadata_id=metadata_id
+        )
+        return lib, metas, item
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_named_products_listed_without_metadata(self, repo: Repository, tmp_path: Path) -> None:
+        """没有元数据时模板无从代入, 按同名前缀兜底, 否则清单里只剩正片."""
+        lib, metas, item = await self._seed_prefix_products(repo, tmp_path, with_meta=False)
+
+        outcome = build_footprint.sync(library=lib, items=[item], indexed=[item], metas=metas, include_work_dir=False)
+
+        names = sorted(entry.path.name for entry in outcome.inventory.entries)
+        assert names == [
+            "START-460-4K.(mkv)-fanart.jpg",
+            "START-460-4K.(mkv)-poster.jpg",
+            "START-460-4K.(mkv)-thumb.jpg",
+            "START-460-4K.(mkv).nfo",
+            "START-460-4K.(mkv).strm",
+        ]
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_named_products_fill_in_what_templates_miss(self, repo: Repository, tmp_path: Path) -> None:
+        """有元数据但模板只算出 nfo 时, 图仍要按同名前缀补进清单."""
+        lib, metas, item = await self._seed_prefix_products(repo, tmp_path, with_meta=True)
+
+        outcome = build_footprint.sync(library=lib, items=[item], indexed=[item], metas=metas, include_work_dir=False)
+
+        names = sorted(entry.path.name for entry in outcome.inventory.entries)
+        assert names == [
+            "START-460-4K.(mkv)-fanart.jpg",
+            "START-460-4K.(mkv)-poster.jpg",
+            "START-460-4K.(mkv)-thumb.jpg",
+            "START-460-4K.(mkv).nfo",
+            "START-460-4K.(mkv).strm",
+        ]
+
     @pytest.mark.asyncio(loop_scope="function")
     async def test_work_dir_lists_everything_inside(self, repo: Repository, tmp_path: Path) -> None:
         """整目录删除按内容展开: 未被索引的同目录文件也在清单里, 用户看得到."""

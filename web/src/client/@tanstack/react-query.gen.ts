@@ -1642,6 +1642,7 @@ export const proxyImageQueryKey = (options: Options<ProxyImageData>) => createQu
  *
  * 上游失败记入进程内负缓存 (15 分钟), 窗口内同 URL 直接 502.
  * 同 URL 进行中请求合并为一次 acquire.
+ * ``scraping.cache_preview_images`` 关闭时只透传字节, 不写资源目录.
  */
 export const proxyImageOptions = (options: Options<ProxyImageData>) => queryOptions<unknown, ProxyImageError, unknown, ReturnType<typeof proxyImageQueryKey>>({
     queryFn: async ({ queryKey, signal }) => {

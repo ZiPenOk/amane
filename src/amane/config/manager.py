@@ -364,6 +364,10 @@ class ScrapingConfig(BaseModel):
         default_factory=lambda: [r for r in DownloadableResource if r != DownloadableResource.trailer],
         description="刮削时自动下载到 Resource 目录的资源类型",
     )
+    cache_preview_images: bool = Field(
+        default=True,
+        description="浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘",
+    )
     crop_poster: bool = True
 
     poster_ratio: float = Field(default=0.7, ge=0.3, le=1.0)

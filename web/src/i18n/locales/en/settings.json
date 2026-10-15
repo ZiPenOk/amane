@@ -31,6 +31,10 @@
   },
   "fields": {
     "scraping": {
+      "cache_preview_images": {
+        "label": "Cache preview images",
+        "description": "Cache external preview images into the resource directory while browsing the UI; when off they are streamed without being stored"
+      },
       "download_resources": {
         "label": "Download on scrape",
         "description": "Cover/poster/stills are still downloaded when opening a movie's detail page, even if not selected here",

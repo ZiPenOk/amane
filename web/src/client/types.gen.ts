@@ -4014,6 +4014,12 @@ export type ScrapingConfig = {
      */
     download_resources?: Array<DownloadableResource>;
     /**
+     * Cache Preview Images
+     *
+     * 浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘
+     */
+    cache_preview_images?: boolean;
+    /**
      * Crop Poster
      */
     crop_poster?: boolean;

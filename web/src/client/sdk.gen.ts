@@ -678,6 +678,7 @@ export const updateComment = <ThrowOnError extends boolean = false>(options: Opt
  *
  * 上游失败记入进程内负缓存 (15 分钟), 窗口内同 URL 直接 502.
  * 同 URL 进行中请求合并为一次 acquire.
+ * ``scraping.cache_preview_images`` 关闭时只透传字节, 不写资源目录.
  */
 export const proxyImage = <ThrowOnError extends boolean = false>(options: Options<ProxyImageData, ThrowOnError>): RequestResult<ProxyImageResponses, ProxyImageErrors, ThrowOnError> => (options.client ?? client).get<ProxyImageResponses, ProxyImageErrors, ThrowOnError>({ url: '/api/resources/proxy', ...options });
 

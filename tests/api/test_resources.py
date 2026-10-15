@@ -7,6 +7,7 @@ import pytest
 from PIL import Image
 
 from amane.media import ResourceStore
+from amane.net.errors import RequestError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -119,3 +120,43 @@ class TestProxyImage:
         assert cached.content == b""
         assert cached.headers["etag"] == '"abc123hash"'
         assert "no-cache" in cached.headers.get("cache-control", "")
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_passthrough_when_preview_cache_disabled(self, client: AsyncClient, app, monkeypatch):
+        """关闭 cache_preview_images 时只透传字节, 不落盘 (acquire 不被调用)."""
+        png_data = b"\x89PNG\r\n\x1a\n passthrough body"
+        mock_web = AsyncMock()
+        mock_web.get_bytes = AsyncMock(return_value=png_data)
+        monkeypatch.setattr(app.state.runtime, "web_client", mock_web)
+
+        mock_store = AsyncMock()
+        mock_store.acquire = AsyncMock(return_value=None)
+        monkeypatch.setattr(app.state.runtime, "resource_store", mock_store)
+
+        monkeypatch.setattr(app.state.runtime.config.hot.scraping, "cache_preview_images", False)
+
+        url = "http://example.com/image.png"
+        resp = await client.get(f"resources/proxy?url={url}")
+        assert resp.status_code == 200
+        assert resp.content == png_data
+        assert resp.headers["content-type"] == "image/png"
+        assert mock_web.get_bytes.await_count == 1
+        assert mock_store.acquire.await_count == 0
+        assert not app.state.runtime.proxy_failure_cache.is_blocked(url)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_passthrough_upstream_error_uses_negative_cache(self, client: AsyncClient, app, monkeypatch):
+        """透传模式上游失败仍走负缓存: 二次请求不再打 web_client."""
+        mock_web = AsyncMock()
+        mock_web.get_bytes = AsyncMock(side_effect=RequestError("http://example.com/x.png", "boom"))
+        monkeypatch.setattr(app.state.runtime, "web_client", mock_web)
+        monkeypatch.setattr(app.state.runtime.config.hot.scraping, "cache_preview_images", False)
+
+        url = "http://example.com/missing.png"
+        first = await client.get(f"resources/proxy?url={url}")
+        assert first.status_code == 502
+        assert mock_web.get_bytes.await_count == 1
+
+        second = await client.get(f"resources/proxy?url={url}")
+        assert second.status_code == 502
+        assert mock_web.get_bytes.await_count == 1

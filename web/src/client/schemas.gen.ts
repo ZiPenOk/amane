@@ -2904,6 +2904,7 @@ export const HotSettingsSchema = {
                     'poster',
                     'extrafanart'
                 ],
+                cache_preview_images: true,
                 crop_poster: true,
                 poster_ratio: 0.7,
                 poster_crop_skip_ratio: 0.9,
@@ -7703,6 +7704,12 @@ export const ScrapingConfigSchema = {
             type: 'array',
             title: 'Download Resources',
             description: '刮削时自动下载到 Resource 目录的资源类型'
+        },
+        cache_preview_images: {
+            type: 'boolean',
+            title: 'Cache Preview Images',
+            description: '浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘',
+            default: true
         },
         crop_poster: {
             type: 'boolean',

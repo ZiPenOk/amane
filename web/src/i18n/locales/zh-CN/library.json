@@ -56,12 +56,12 @@
     }
   },
   "batch": {
-    "confirmDeleteTitle": "删除媒体文件",
-    "confirmDeleteDesc": "确定要删除 {{count}} 个已选媒体文件吗？此操作不可撤销"
+    "confirmDeleteTitle": "只删除记录",
+    "confirmDeleteDesc": "仅从片库移除选中的 {{count}} 条媒体记录: 磁盘上的文件、刮削产物与刮削结果都保留。要连文件一起删, 请改选「删除文件」或「删除所在目录」。"
   },
   "detail": {
-    "confirmDeleteTitle": "删除媒体文件",
-    "confirmDeleteDesc": "确定要删除此媒体文件吗？此操作不可撤销"
+    "confirmDeleteTitle": "只删除记录",
+    "confirmDeleteDesc": "仅从片库移除这条媒体记录: 磁盘上的文件、刮削产物与刮削结果都保留, 重新扫描会重新入库。要连文件一起删, 请改选「删除文件」或「删除所在目录」。"
   },
   "filters": {
     "title": "按状态筛选",

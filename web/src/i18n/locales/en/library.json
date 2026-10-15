@@ -56,14 +56,14 @@
     }
   },
   "batch": {
-    "confirmDeleteTitle": "Delete Media Files",
-    "confirmDeleteDesc": "Are you sure you want to delete {{count}} selected media files? This action cannot be undone",
-    "confirmDeleteDesc_one": "Are you sure you want to delete {{count}} selected media file? This action cannot be undone",
-    "confirmDeleteDesc_other": "Are you sure you want to delete {{count}} selected media files? This action cannot be undone"
+    "confirmDeleteTitle": "Remove records only",
+    "confirmDeleteDesc": "Removes only the {{count}} selected media records from the library. Files on disk, scraped artifacts and scraped metadata are kept. To delete files too, pick \"Delete files\" or \"Delete work directory\".",
+    "confirmDeleteDesc_one": "Removes only the {{count}} selected media record from the library. Files on disk, scraped artifacts and scraped metadata are kept. To delete files too, pick \"Delete files\" or \"Delete work directory\".",
+    "confirmDeleteDesc_other": "Removes only the {{count}} selected media records from the library. Files on disk, scraped artifacts and scraped metadata are kept. To delete files too, pick \"Delete files\" or \"Delete work directory\"."
   },
   "detail": {
-    "confirmDeleteTitle": "Delete Media File",
-    "confirmDeleteDesc": "Are you sure you want to delete this media file? This action cannot be undone"
+    "confirmDeleteTitle": "Remove record only",
+    "confirmDeleteDesc": "Removes only this media record from the library. Files on disk, scraped artifacts and scraped metadata are kept, and a rescan will re-import it. To delete files too, pick \"Delete files\" or \"Delete work directory\"."
   },
   "filters": {
     "title": "Filter by status",

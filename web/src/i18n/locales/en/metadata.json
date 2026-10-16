@@ -289,6 +289,11 @@
   },
   "notFound": "Film not found",
   "invalidId": "Invalid film ID",
+  "orphans": {
+    "title": "{{n}} entries have no linked files",
+    "description": "Usually left behind after a movie is deleted in Emby, or after its files were removed. Nothing is cleaned up automatically; deleting metadata is irreversible and takes comments and user tags with it.",
+    "action": "Review"
+  },
   "confirmDelete": "Delete scraped metadata for film #{{id}}? Only the metadata and its actor/tag/comment links are removed. Files on disk and the media library record are kept (status goes back to pending). This cannot be undone",
   "empty": "No films",
   "editor": {

@@ -1,5 +1,15 @@
-import { ActionIcon, Badge, Group, SegmentedControl, Text, TextInput, Title } from "@mantine/core";
-import { IconFilter, IconSearch, IconTable, IconX } from "@tabler/icons-react";
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Group,
+  SegmentedControl,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
+import { IconAlertTriangle, IconFilter, IconSearch, IconTable, IconX } from "@tabler/icons-react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
@@ -181,6 +191,13 @@ function MetaIndexPage() {
   );
   const total = isList ? (listQuery.data?.total ?? 0) : (gridQuery.data?.pages[0]?.total ?? 0);
 
+  // 没有关联文件的条目不会被自动清理 (自动删元数据不可逆), 仅在存在且未按文件筛选时提示一次.
+  const orphanQuery = useQuery({
+    ...listMetadataOptions({ query: { has_files: false, limit: 1 } }),
+    enabled: hasFiles === null,
+  });
+  const orphanTotal = orphanQuery.data?.total ?? 0;
+
   function handleSearchChange(v: string) {
     setSearchInput(v);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -228,6 +245,13 @@ function MetaIndexPage() {
         );
         return { ...prev, ...next, page: 1 };
       },
+    });
+  }
+
+  function reviewOrphans() {
+    // 勾选与批量删除只在列表视图里, 因此这一步一并切过去.
+    void navigate({
+      search: (prev) => ({ ...prev, has_files: "false", view: "list", page: 1 }),
     });
   }
 
@@ -358,6 +382,20 @@ function MetaIndexPage() {
         />
       }
     >
+      {hasFiles === null && orphanTotal > 0 && (
+        <Alert
+          color="yellow"
+          variant="light"
+          icon={<IconAlertTriangle size={16} />}
+          title={t("orphans.title", { n: orphanTotal })}
+        >
+          <Text size="sm">{t("orphans.description")}</Text>
+          <Button size="xs" mt="sm" variant="light" color="yellow" onClick={reviewOrphans}>
+            {t("orphans.action")}
+          </Button>
+        </Alert>
+      )}
+
       {hasActiveFilters && (
         <Group gap="xs">
           {search.saved_query_id != null && (

@@ -286,6 +286,35 @@ def parse_file_info(
     )
 
 
+def subtitle_matches_video(
+    video: FileInfo,
+    subtitle: FileInfo,
+    *,
+    video_stem: str,
+    subtitle_stem: str,
+    strict_unparsed: bool = False,
+) -> bool:
+    """外挂字幕是否属于给定视频.
+
+    字幕解析出番号时, 必须与视频番号相同 (忽略大小写), 再按分集配对.
+    解析不出番号时, 默认沿用独立目录的分集回退; ``strict_unparsed`` 为真时额外要求同文件主干,
+    供中字角标判定排除目录内无番号的无关字幕.
+    """
+    if subtitle.number is not None:
+        if video.number is None or subtitle.number.casefold() != video.number.casefold():
+            return False
+        return _cd_matches(video.cd, subtitle.cd)
+    if strict_unparsed and video_stem.casefold() != subtitle_stem.casefold():
+        return False
+    return _cd_matches(video.cd, subtitle.cd)
+
+
+def _cd_matches(video_cd: int | None, subtitle_cd: int | None) -> bool:
+    if subtitle_cd == video_cd:
+        return True
+    return video_cd == 1 and subtitle_cd is None
+
+
 def extract_number(text: str, escape_strings: list[str] | None = None) -> str | None:
     """未命中返回 None, 不能把原文冒充番号."""
     return parse_file_info(text=text, escape_strings=escape_strings).number

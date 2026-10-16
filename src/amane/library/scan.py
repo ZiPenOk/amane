@@ -31,9 +31,9 @@ class UnwantedKind(StrEnum):
 class LibraryHit:
     """一次遍历命中的文件.
 
-    ``has_companion_subtitle`` 由同层子项的扩展名判定, 不额外读取磁盘; 与
-    `rules.has_companion_subtitle` 同口径, 区别只在悬空链接按文件计. 不经遍历构造命中
-    (云盘事件) 的调用方保持假值.
+    ``has_companion_subtitle`` 由同层已枚举到的字幕文件与媒体按番号 / 分集 / 主干配对得出,
+    不额外读取磁盘; 与 `rules.has_companion_subtitle` 同口径. 不经遍历构造命中 (云盘事件)
+    的调用方保持假值.
     """
 
     path: Path

@@ -182,10 +182,13 @@ def test_is_undersized_video_stat_failure_is_not_undersized(tmp_path: Path):
 
 
 COMPANION_SUBTITLE_CASES = [
-    (["video.mp4", "video.srt"], [".srt"], "video.mp4", True),
-    (["video.mp4", "other.ass"], [".srt", ".ass"], "video.mp4", True),
-    (["video.mp4", "sub.SRT"], [".srt"], "video.mp4", True),
+    (["MIDV-123.mp4", "MIDV-123.srt"], [".srt"], "MIDV-123.mp4", True),
+    (["MIDV-123.mp4", "MIDV-123.chs.ass"], [".srt", ".ass"], "MIDV-123.mp4", True),
+    (["MIDV-123.mp4", "MIDV-123.ass"], [".SRT", ".ASS"], "MIDV-123.mp4", True),
+    (["MIDV-123.mp4", "MIDV-124.srt"], [".srt"], "MIDV-123.mp4", False),
     (["video.mp4", "video.ass"], [".SRT", ".ASS"], "video.mp4", True),
+    (["video.mp4", "other.ass"], [".ass"], "video.mp4", False),
+    (["MIDV-123.mp4", "sub.SRT"], [".srt"], "MIDV-123.mp4", False),
     (["video.mp4", "video.txt"], [".srt"], "video.mp4", False),
     (["video.mp4", "video.srt"], [], "video.mp4", False),
     (["video.mp4", "video.srt"], ["srt"], "video.mp4", False),
@@ -203,6 +206,13 @@ def test_has_companion_subtitle_ignores_directories(tmp_path: Path):
     (tmp_path / "video.mp4").touch()
     (tmp_path / "nested.srt").mkdir()
     assert has_companion_subtitle.sync(tmp_path / "video.mp4", [".srt"]) is False
+
+
+def test_has_companion_subtitle_does_not_match_itself(tmp_path: Path):
+    """媒体后缀同时写进字幕扩展名时不把自身当字幕."""
+    video = tmp_path / "WA-597.(mp4).strm"
+    video.touch()
+    assert has_companion_subtitle.sync(video, [".strm"]) is False
 
 
 def test_has_companion_subtitle_missing_directory_is_false(tmp_path: Path):

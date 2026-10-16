@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from ...parsing import parse_file_info, subtitle_matches_video
 from ...utils.path import is_name_surrogate, path_key
 from ...utils.threads import in_thread
 from ..rules import TRASH_DIRNAME
@@ -391,7 +392,7 @@ def _walk(
     entries = 0
     level_media = False
     level_veto = False
-    level_has_subtitle = False
+    level_subtitles: list[Path] = []
     level_newest_mtime = 0.0
     subtree_media = False
     explainable = True
@@ -427,8 +428,12 @@ def _walk(
         level_newest_mtime = max(level_newest_mtime, child_stat.st_mtime)
         newest_mtime = max(newest_mtime, child_stat.st_mtime)
         is_dir = stat.S_ISDIR(child_stat.st_mode)
-        if not is_dir and path.suffix.lower() in scan.subtitle_extensions:
-            level_has_subtitle = True
+        if (
+            not is_dir
+            and path.suffix.lower() in scan.subtitle_extensions
+            and path.suffix.lower() not in scan.media_extensions
+        ):
+            level_subtitles.append(path)
         # 判定顺序是契约的一部分: 系统产物先于媒体判据 (._x.mp4 是伴生文件, 不是视频),
         # 媒体先于白名单 (用户可以把 .mp4 写进 subtitle_extensions).
         junk = classify_junk(path, is_dir=is_dir)
@@ -480,9 +485,25 @@ def _walk(
             continue
         explainable = False
 
-    # 字幕文件命中在枚举顺序上可能晚于媒体, 因此遍历结束后统一标记本层媒体命中.
-    if level_has_subtitle:
-        state.media[media_start:] = [replace(hit, has_companion_subtitle=True) for hit in state.media[media_start:]]
+    # 字幕文件命中可能晚于媒体, 遍历结束后按番号 / 分集 / 主干逐条配对标记.
+    if level_subtitles:
+        marked: list[LibraryHit] = []
+        for hit in state.media[media_start:]:
+            video = parse_file_info(hit.path)
+            if any(
+                subtitle_matches_video(
+                    video,
+                    parse_file_info(text=subtitle.name),
+                    video_stem=hit.path.stem,
+                    subtitle_stem=subtitle.stem,
+                    strict_unparsed=True,
+                )
+                for subtitle in level_subtitles
+            ):
+                marked.append(replace(hit, has_companion_subtitle=True))
+            else:
+                marked.append(hit)
+        state.media[media_start:] = marked
 
     level = _LevelFacts(
         has_media=level_media,

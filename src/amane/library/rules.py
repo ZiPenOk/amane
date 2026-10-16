@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import AfterValidator
 
+from ..parsing import parse_file_info, subtitle_matches_video
 from ..utils.threads import in_thread
 
 if TYPE_CHECKING:
@@ -154,21 +155,34 @@ def is_in_trash(path: Path) -> bool:
 
 @in_thread
 def has_companion_subtitle(video_path: Path, subtitle_extensions: Sequence[str]) -> bool:
-    """视频同目录 (不递归) 存在库配置的字幕扩展名文件.
+    """视频同目录 (不递归) 存在配对该视频的字幕文件.
 
-    只认扩展名, 不看文件名与语言: 同目录其它视频共用的字幕同样算命中.
+    配对规则与字幕整理一致: 字幕文件名解析出番号时须与视频番号、分集一致;
+    解析不出番号时只认与视频同文件主干 (忽略大小写) 的字幕. 只认扩展名, 不看语言.
     空扩展名列表关闭发现. 目录读不到 (不存在 / 无权限) 按无字幕处理.
     """
     extensions = {ext.lower() for ext in subtitle_extensions}
     if not extensions:
         return False
+    parent = video_path.parent
+    if not parent.is_dir():
+        return False
+    video = parse_file_info(video_path)
     try:
-        if video_path.suffix.lower() in extensions:
-            return True
-        parent = video_path.parent
         with os.scandir(parent) as entries:
             for entry in entries:
-                if entry.is_file() and Path(entry.name).suffix.lower() in extensions:
+                if not entry.is_file() or entry.name == video_path.name:
+                    continue
+                child = Path(entry.name)
+                if child.suffix.lower() not in extensions:
+                    continue
+                if subtitle_matches_video(
+                    video,
+                    parse_file_info(text=child.name),
+                    video_stem=video_path.stem,
+                    subtitle_stem=child.stem,
+                    strict_unparsed=True,
+                ):
                     return True
     except OSError:
         return False

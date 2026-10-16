@@ -161,6 +161,32 @@ class TestScanInventory:
         assert inventory.skipped_dirs == 1
         assert lib / "blocked" not in inventory.dirs
 
+    def test_media_subtitle_flag_pairs_by_number(self, tmp_path: Path) -> None:
+        """同一目录有多条视频时, 字幕只标记配对的那条, 不再整层命中."""
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        (lib / "MIDV-001.mp4").write_bytes(b"x" * 4096)
+        (lib / "MIDV-002.mp4").write_bytes(b"x" * 4096)
+        (lib / "MIDV-001.srt").write_text("x")
+
+        scan = LibraryScan(subtitle_extensions=[".srt"])
+        inventory = _inventory(lib, scan=scan, collect_media=True)
+
+        flags = {hit.path.name: hit.has_companion_subtitle for hit in inventory.media_hits}
+        assert flags == {"MIDV-001.mp4": True, "MIDV-002.mp4": False}
+
+    def test_media_subtitle_flag_does_not_match_self(self, tmp_path: Path) -> None:
+        """媒体后缀同时写进字幕扩展名时, .strm 不因自身命中而标记."""
+        lib = tmp_path / "lib"
+        lib.mkdir()
+        (lib / "WA-597.(mp4).strm").write_text("x")
+
+        scan = LibraryScan(subtitle_extensions=[".strm"])
+        inventory = _inventory(lib, scan=scan, collect_media=True)
+
+        assert len(inventory.media_hits) == 1
+        assert inventory.media_hits[0].has_companion_subtitle is False
+
     def test_truncation_keeps_walking_for_media(self, tmp_path: Path, candidates_first_scandir: None) -> None:
         """触顶只丢条目: 本趟遍历同时给入库扫描收集媒体, 提前收工会让媒体缺项."""
         lib = tmp_path / "lib"

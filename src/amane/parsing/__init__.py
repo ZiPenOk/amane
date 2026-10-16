@@ -18,6 +18,7 @@ from .file_info import (
     max_definition,
     parse_file_info,
     split_number,
+    subtitle_matches_video,
     summarize_file_phases,
 )
 
@@ -41,5 +42,6 @@ __all__ = [
     "parse_file_info",
     "split_actor_aliases",
     "split_number",
+    "subtitle_matches_video",
     "summarize_file_phases",
 ]

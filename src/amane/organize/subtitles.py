@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from ..enums import ActorGender, MoveMode
-from ..parsing import FileInfo, parse_file_info
+from ..parsing import FileInfo, parse_file_info, subtitle_matches_video
 from ..utils.threads import in_thread
 from .file import PlaceOutcome, execute_organize
 from .path_templates import resolve_subtitle_path
@@ -38,7 +38,12 @@ def discover_subtitles(video_path: Path, extensions: Sequence[str], video: FileI
             continue
         if child.suffix.lower() not in exts:
             continue
-        if _belongs(video, parse_file_info(text=child.name)):
+        if subtitle_matches_video(
+            video,
+            parse_file_info(text=child.name),
+            video_stem=video_path.stem,
+            subtitle_stem=child.stem,
+        ):
             found.append(child)
     found.sort(key=lambda p: p.name.casefold())
     return found
@@ -99,15 +104,3 @@ def place_subtitles(
             case PlaceOutcome.FAILED:
                 logger.warning("subtitle organize failed", source=str(sub), dest=str(dest), error=result.error)
     return conflicted
-
-
-def _belongs(video: FileInfo, sub: FileInfo) -> bool:
-    if sub.number is not None and (video.number is None or sub.number.casefold() != video.number.casefold()):
-        return False
-    return _cd_belongs(video.cd, sub.cd)
-
-
-def _cd_belongs(video_cd: int | None, sub_cd: int | None) -> bool:
-    if sub_cd == video_cd:
-        return True
-    return video_cd == 1 and sub_cd is None

@@ -1826,6 +1826,49 @@ export const DownloadableResourceSchema = {
     description: '影片附属资源类型: 刮削写入 Resource, 整理时按库配置复制到库路径.'
 } as const;
 
+export const EmbyConfigSchema = {
+    properties: {
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled',
+            default: false
+        },
+        url: {
+            type: 'string',
+            title: 'Url',
+            default: 'http://127.0.0.1:8096'
+        },
+        api_key: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Api Key'
+        },
+        timeout: {
+            type: 'number',
+            maximum: 60,
+            minimum: 1,
+            title: 'Timeout',
+            default: 5
+        },
+        debounce_seconds: {
+            type: 'number',
+            maximum: 300,
+            minimum: 0,
+            title: 'Debounce Seconds',
+            default: 10
+        }
+    },
+    type: 'object',
+    title: 'EmbyConfig',
+    description: 'Emby / Jellyfin 媒体库刷新通知. 任务链里的 ORGANIZE / DELETE 全部结束后触发.\n\n见 docs/dev/task-system.md「媒体库刷新」.'
+} as const;
+
 export const ErrorRowSchema = {
     properties: {
         seq: {
@@ -3372,6 +3415,25 @@ export const HotSettingsSchema = {
                 enabled: false,
                 max_dim: 1100,
                 quality: 80
+            }
+        },
+        emby: {
+            $ref: '#/components/schemas/EmbyConfig',
+            default: {
+                enabled: false,
+                url: 'http://127.0.0.1:8096',
+                timeout: 5,
+                debounce_seconds: 10
+            }
+        },
+        smartstrm: {
+            $ref: '#/components/schemas/SmartStrmConfig',
+            default: {
+                enabled: false,
+                webhook_url: '',
+                local_root: '/media',
+                emby_root: '/strm',
+                timeout: 5
             }
         },
         watermark: {
@@ -8271,6 +8333,41 @@ export const SkipReasonSchema = {
     ],
     title: 'SkipReason',
     description: '``SKIPPED`` 的原因.\n\n与 ``FailureReason`` 分开: 这一档不是失败, 文案也不进站点明细. 界面按它本地化, 因此每种原因\n都要能独立读懂, 不依赖 ``detail``.'
+} as const;
+
+export const SmartStrmConfigSchema = {
+    properties: {
+        enabled: {
+            type: 'boolean',
+            title: 'Enabled',
+            default: false
+        },
+        webhook_url: {
+            type: 'string',
+            title: 'Webhook Url',
+            default: ''
+        },
+        local_root: {
+            type: 'string',
+            title: 'Local Root',
+            default: '/media'
+        },
+        emby_root: {
+            type: 'string',
+            title: 'Emby Root',
+            default: '/strm'
+        },
+        timeout: {
+            type: 'number',
+            maximum: 60,
+            minimum: 1,
+            title: 'Timeout',
+            default: 5
+        }
+    },
+    type: 'object',
+    title: 'SmartStrmConfig',
+    description: 'SmartStrm 远端删除通知: Amane 删除库内媒体文件后同步删除网盘源文件.\n\n见 docs/dev/task-system.md「远端删除通知」.'
 } as const;
 
 export const SortOrderSchema = {

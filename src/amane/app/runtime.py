@@ -17,6 +17,7 @@ from ..crawlers.factory import CrawlerFactory
 from ..crawlers.http import HttpClient
 from ..crawlers.r18dev import R18Database
 from ..db.models import TaskType
+from ..emby import EmbyNotifier
 from ..enums import BrowserBackendName, BrowserMode, SiteName
 from ..handlers import (
     ActorScrapeHandler,
@@ -40,6 +41,7 @@ from ..playback import PlaybackFactory, PlaybackState
 from ..plugins.manager import PluginManager
 from ..plugins.packaging import install_plugin_path, install_plugin_zip, uninstall_plugin_tree
 from ..scheduler.worker import MAIN_LOOP_STOP_TIMEOUT, AsyncWorker
+from ..smartstrm import SmartStrmNotifier
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -223,6 +225,8 @@ class AppRuntime:
     inventory_store: InventoryStore = field(default_factory=InventoryStore)
     browser: BrowserPool | None = None
     r18_handle: R18Handle | None = None
+    emby_notifier: EmbyNotifier | None = None
+    """会话级媒体库刷新通知器; rebuild 只换它的 HTTP 通道与配置."""
 
     _r18_config: R18Config | None = field(default=None, repr=False)
     _browser_key: tuple[BrowserConfig, str | None] | None = field(default=None, repr=False)
@@ -280,6 +284,9 @@ class AppRuntime:
         self.browser = stack.browser
         if self.feed_service is not None:
             self.feed_service.set_web_client(self.web_client)
+        if self.emby_notifier is not None:
+            # 去重与待刷新状态跨 rebuild 保留, 只换出站通道与配置.
+            self.emby_notifier.set_context(web_client=self.web_client, config=hot.emby)
 
         # 使用新处理器与并发数重建 worker
         self.worker = AsyncWorker(
@@ -303,6 +310,7 @@ class AppRuntime:
             event_bus=self.event_bus,
             log_dir=self.config.cold.log_dir,
             get_hot=lambda: self.config.hot,
+            emby=self.emby_notifier,
         )
         self.worker.set_paused(paused)
 
@@ -546,7 +554,13 @@ def build_handlers(
             library_locks=library_locks,
         ),
         TaskType.SCAN_INVALID: ScanInvalidHandler(repo, hot, inventory_store),
-        TaskType.DELETE: DeleteHandler(repo, inventory_store, hot, library_locks=library_locks),
+        TaskType.DELETE: DeleteHandler(
+            repo,
+            inventory_store,
+            hot,
+            library_locks=library_locks,
+            smartstrm=SmartStrmNotifier(web_client, hot.smartstrm),
+        ),
         TaskType.CLEANUP: CleanupHandler(repo=repo, resource_store=resource_store),
         TaskType.UPSCALE: UpscaleHandler(resource_store, hot),
         TaskType.RESCRAPE: RescrapeHandler(repo),

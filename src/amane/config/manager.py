@@ -663,6 +663,53 @@ class CompressConfig(BaseModel):
     """重编码质量 (JPEG / WEBP)."""
 
 
+class EmbyConfig(BaseModel):
+    """Emby / Jellyfin 媒体库刷新通知. 任务链里的 ORGANIZE / DELETE 全部结束后触发.
+
+    见 docs/dev/task-system.md「媒体库刷新」.
+    """
+
+    enabled: bool = False
+    """关闭时不发请求, Worker 也不查链状态."""
+
+    url: str = "http://127.0.0.1:8096"
+    """Emby 根地址, 例如 http://127.0.0.1:8096; 可含路径前缀 (反向代理挂在子路径时)."""
+
+    api_key: str | None = None
+    """Emby API Key; 留空则不发送 X-Emby-Token 头."""
+
+    timeout: float = Field(default=5.0, ge=1.0, le=60.0)
+    """单次通知超时 (秒), 失败只记日志."""
+
+    debounce_seconds: float = Field(default=10.0, ge=0.0, le=300.0)
+    """多条任务链的刷新合并窗口 (秒); 0 表示每条链各自立即刷新.
+
+    文件监控一次拖入多个影片时派生的是多条互相独立的链, 合并后只扫一次库.
+    """
+
+
+class SmartStrmConfig(BaseModel):
+    """SmartStrm 远端删除通知: Amane 删除库内媒体文件后同步删除网盘源文件.
+
+    见 docs/dev/task-system.md「远端删除通知」.
+    """
+
+    enabled: bool = False
+    """关闭时 DELETE 任务不投递通知."""
+
+    webhook_url: str = ""
+    """SmartStrm 的 Webhook 地址, 形如 http://192.168.1.2:8024/webhook/<token>."""
+
+    local_root: str = "/media"
+    """Amane 侧媒体库的挂载根; 库路径必须位于其下, 映射时整段替换为 ``emby_root``."""
+
+    emby_root: str = "/strm"
+    """SmartStrm 挂载到 Emby 的 STRM 根路径, 须与 SmartStrm 的 ``strm_in_emby`` 一致."""
+
+    timeout: float = Field(default=5.0, ge=1.0, le=60.0)
+    """单次通知超时 (秒), 失败只记日志."""
+
+
 PROMPT_MAX_LENGTH = 2000
 """单条提示词长度上限, 避免超长文本撑大 TOML 与设置表单."""
 
@@ -859,6 +906,8 @@ class HotSettings(BaseModel):
     network: NetworkConfig = NetworkConfig()
     sr: SrConfig = SrConfig()
     compress: CompressConfig = CompressConfig()
+    emby: EmbyConfig = EmbyConfig()
+    smartstrm: SmartStrmConfig = SmartStrmConfig()
     watermark: WatermarkConfig = WatermarkConfig()
     llm: LLMConfig = LLMConfig()
     r18: R18Config = R18Config()

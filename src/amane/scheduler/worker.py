@@ -9,6 +9,7 @@ import structlog
 from pydantic import BaseModel
 
 from ..config import HotSettings
+from ..db.models import TaskType
 from ..events import EventType
 from ..handlers.protocol import TaskResult
 from ..observability import Recorder
@@ -17,14 +18,18 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from ..db.models import Task, TaskType
+    from ..db.models import Task
     from ..db.repository import Repository
+    from ..emby import EmbyRefresher
     from ..events import EventBus
     from ..handlers.protocol import TaskHandler
 
 logger = structlog.get_logger()
 
 CANCEL_ERROR = "已由用户取消"
+
+_EMBY_REFRESH_TASK_TYPES = (TaskType.ORGANIZE, TaskType.DELETE)
+"""链里出现过这些类型的成功任务才值得刷新媒体库: 其余类型不改动入库结果."""
 
 _DEFAULT_SHUTDOWN_TIMEOUT = 0
 # 关闭时等待主循环 (含尚未结算的认领) 退出的兜底阈值; 正常路径只等它自己退出.
@@ -48,6 +53,7 @@ class AsyncWorker:
         event_bus: EventBus | None = None,
         log_dir: Path | None = None,
         get_hot: Callable[[], HotSettings] | None = None,
+        emby: EmbyRefresher | None = None,
     ):
         self._repo = repo
         self._handlers = handlers
@@ -64,6 +70,7 @@ class AsyncWorker:
         self._event_bus = event_bus
         self._log_dir = log_dir
         self._get_hot = get_hot
+        self._emby = emby
         self._active_recorders: dict[int, Recorder] = {}  # 未 finalize 的 Recorder, shutdown 时关闭
         self._cleanup_tasks: set[asyncio.Task[bool]] = set()  # 取消兜底写入, 保持引用
         self._paused = False
@@ -145,6 +152,23 @@ class AsyncWorker:
         for rec in list(self._active_recorders.values()):
             rec.close()
         self._active_recorders.clear()
+
+    async def _notify_emby(self, task: Task) -> None:
+        """链里做过整理 / 删除且已全部结算时请求刷新媒体库.
+
+        只在链的最后一个任务结算后被触发, 判定交给数据库 — 收尾任务的类型不固定
+        (``REFRESH`` → ``SCRAPE`` → ``ORGANIZE`` / ``ACTOR_SCRAPE``, 最后结束的那个才是链尾).
+        """
+        if self._emby is None or not self._emby.enabled:
+            return
+        # 根任务在完成事务里才指向自己; 认领时读到的仍是 None, 此时它的链就是它自己.
+        root_task_id = task.root_task_id if task.root_task_id is not None else task.id
+        assert root_task_id is not None
+        if await self._repo.root_chain_pending(root_task_id):
+            return
+        if not await self._repo.root_chain_has_done(root_task_id, _EMBY_REFRESH_TASK_TYPES):
+            return
+        await self._emby.refresh(root_task_id=root_task_id)
 
     def _on_task_done(self, task_id: int, task: asyncio.Task[None]) -> None:
         """移除登记; 已登记但未首次调度即被取消的任务由兜底写入补终态."""
@@ -341,6 +365,11 @@ class AsyncWorker:
                         )
 
                 self._done_queue.put_nowait(task_id)
+                if result.success:
+                    try:
+                        await self._notify_emby(task)
+                    except Exception:
+                        logger.exception("emby refresh hook failed", task_id=task_id)
             finally:
                 if rec is not None:
                     self._active_recorders.pop(task_id, None)

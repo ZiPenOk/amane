@@ -15,9 +15,11 @@ import pytest
 from amane.config import HotSettings
 from amane.handlers import DeleteHandler, DeletePayload, ScanInvalidHandler, ScanInvalidPayload
 from amane.handlers import delete as delete_module
-from amane.library import ORPHAN_COOLDOWN_SECONDS, InventoryStore, OrphanScan
+from amane.library import ORPHAN_COOLDOWN_SECONDS, DeleteOutcome, InventoryStore, OrphanScan
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from amane.db.repository import Repository
 
 
@@ -753,3 +755,84 @@ def test_reverify_subtree_reports_unreadable(tmp_path: Path, mode: int, expected
 
     assert refusal is not None
     assert refusal.startswith(expected)
+
+
+class RecordingNotifier:
+    """结构上满足 DeleteNotifier; 记录被通知删除的路径."""
+
+    def __init__(self, *, enabled: bool = True) -> None:
+        self.enabled = enabled
+        self.paths: list[Path] = []
+
+    async def notify_deleted(self, paths: Sequence[Path]) -> None:
+        self.paths.extend(paths)
+
+
+def _remote_library(tmp_path: Path) -> Path:
+    """库目录: 一个 .strm 正片与一张同名附属图, 两者都命中黑名单."""
+    lib_root = tmp_path / "lib"
+    (lib_root / "work").mkdir(parents=True)
+    (lib_root / "work" / "ABC-123.strm").write_bytes(b"x" * 10)
+    (lib_root / "work" / "ABC-123.jpg").write_bytes(b"y" * 10)
+    return lib_root
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_delete_notifies_remote_for_media_files(repo: Repository, tmp_path: Path) -> None:
+    """远端源文件只按媒体文件对账: 附属图与目录条目不参与."""
+    lib_root = _remote_library(tmp_path)
+    lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=["ABC-123"])
+    assert lib.id is not None
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, lib.id)
+    notifier = RecordingNotifier()
+
+    result = await DeleteHandler(repo, store, HotSettings(), smartstrm=notifier).handle(
+        DeletePayload(library_id=lib.id, inventory_id=inventory_id)
+    )
+
+    assert result.success is True
+    assert [path.name for path in notifier.paths] == ["ABC-123.strm"]
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_delete_skips_notify_when_disabled(repo: Repository, tmp_path: Path) -> None:
+    lib_root = _remote_library(tmp_path)
+    lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=["ABC-123"])
+    assert lib.id is not None
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, lib.id)
+    notifier = RecordingNotifier(enabled=False)
+
+    result = await DeleteHandler(repo, store, HotSettings(), smartstrm=notifier).handle(
+        DeletePayload(library_id=lib.id, inventory_id=inventory_id)
+    )
+
+    assert result.success is True
+    assert notifier.paths == []
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_delete_does_not_notify_targets_that_failed(
+    repo: Repository, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """没删掉的目标不能报告成已删除, 否则远端会跟着删掉仍然在用的源文件."""
+    lib_root = _remote_library(tmp_path)
+    lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=["ABC-123"])
+    assert lib.id is not None
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, lib.id)
+    notifier = RecordingNotifier()
+
+    async def failing_delete(path: Path, *, library_root: Path) -> DeleteOutcome:
+        return DeleteOutcome(status="failed", error="boom")
+
+    monkeypatch.setattr(delete_module, "delete_target", failing_delete)
+    result = await DeleteHandler(repo, store, HotSettings(), smartstrm=notifier).handle(
+        DeletePayload(library_id=lib.id, inventory_id=inventory_id)
+    )
+
+    assert result.success is True
+    assert result.result is not None
+    assert result.result.failed == 2
+    assert notifier.paths == []

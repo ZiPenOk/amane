@@ -15,9 +15,11 @@ from amane.config import (
     ColdSettings,
     ConfigManager,
     DownloadableResource,
+    EmbyConfig,
     HotSettings,
     ScrapingConfig,
     SiteConfig,
+    SmartStrmConfig,
     WatermarkConfig,
     WorkerConfig,
 )
@@ -733,3 +735,56 @@ class TestLLMConfig:
         reloaded = ConfigManager.with_cold(mgr.cold)
         assert reloaded.hot.llm.provider is TranslationProvider.GOOGLE
         assert reloaded.hot.llm.google_endpoint == "https://mirror.test/translate_a/single"
+
+
+class TestNotificationConfig:
+    """emby / smartstrm 出站通知: 默认值, 持久化与取值范围."""
+
+    def test_defaults(self) -> None:
+        hot = HotSettings()
+
+        assert hot.emby.enabled is False
+        assert hot.emby.url == "http://127.0.0.1:8096"
+        assert hot.emby.api_key is None
+        assert hot.emby.debounce_seconds == 10.0
+        assert hot.smartstrm.enabled is False
+        assert hot.smartstrm.webhook_url == ""
+        assert hot.smartstrm.local_root == "/media"
+        assert hot.smartstrm.emby_root == "/strm"
+
+    def test_round_trip(self, mgr: ConfigManager) -> None:
+        mgr.update(
+            {
+                "emby": {
+                    "enabled": True,
+                    "url": "http://emby.lan:8096/emby",
+                    "api_key": "secret",
+                    "debounce_seconds": 0,
+                },
+                "smartstrm": {
+                    "enabled": True,
+                    "webhook_url": "http://ss.lan:8024/webhook/tok",
+                    "local_root": "/mnt/strm",
+                    "emby_root": "/strm",
+                },
+            }
+        )
+
+        reloaded = ConfigManager.with_cold(mgr.cold)
+
+        assert reloaded.hot.emby.enabled is True
+        assert reloaded.hot.emby.url == "http://emby.lan:8096/emby"
+        assert reloaded.hot.emby.api_key == "secret"
+        assert reloaded.hot.emby.debounce_seconds == 0.0
+        assert reloaded.hot.smartstrm.webhook_url == "http://ss.lan:8024/webhook/tok"
+        assert reloaded.hot.smartstrm.local_root == "/mnt/strm"
+
+    @pytest.mark.parametrize("value", [-1.0, 301.0])
+    def test_debounce_out_of_range(self, value: float) -> None:
+        with pytest.raises(ValidationError):
+            EmbyConfig(debounce_seconds=value)
+
+    @pytest.mark.parametrize("value", [0.5, 61.0])
+    def test_timeout_out_of_range(self, value: float) -> None:
+        with pytest.raises(ValidationError):
+            SmartStrmConfig(timeout=value)

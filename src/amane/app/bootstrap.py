@@ -16,6 +16,7 @@ from ..config.token import resolve_api_token
 from ..db.engine import create_async_engine_from_path
 from ..db.profiling import DbLogPolicy
 from ..db.repository import Repository
+from ..emby import EmbyNotifier
 from ..events import EventBus
 from ..handlers import LibraryTaskLocks
 from ..library import InventoryStore
@@ -91,6 +92,8 @@ class AppSession:
             await self.runtime.playback_factory.aclose()
         if self.runtime.browser is not None:
             await self.runtime.browser.close()
+        if self.runtime.emby_notifier is not None:
+            await self.runtime.emby_notifier.aclose()
         await self.runtime.web_client.close()
         if self.runtime.translation_cache is not None:
             await self.runtime.translation_cache.close()
@@ -142,6 +145,9 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
 
     resource_store = ResourceStore(engine=engine, base_dir=cold.data_dir / "resources")
 
+    # 会话级媒体库刷新通知器: 去重状态跨热重载保留 (见 runtime._rebuild).
+    emby_notifier = EmbyNotifier(web_client, hot.emby)
+
     # 独立 SQLite, 不纳入 Alembic; 删除文件即清空. 惰性建连.
     translation_cache = TranslationCache(cold.data_dir / "translations.db")
 
@@ -189,6 +195,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
         event_bus=event_bus,
         log_dir=cold.log_dir,
         get_hot=lambda: config.hot,
+        emby=emby_notifier,
     )
     worker.start()
 
@@ -249,6 +256,7 @@ async def start_app(config: ConfigManager | None = None) -> AppSession:
             state=playback_state,
         ),
         browser=stack.browser,
+        emby_notifier=emby_notifier,
     )
     agent_service.bridge.safe_dirs = None if safe_dirs is None else list(safe_dirs)
     agent_service.bridge.watcher = watcher_service

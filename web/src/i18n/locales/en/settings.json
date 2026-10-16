@@ -11,7 +11,9 @@
     "sr": "Super Resolution",
     "compress": "Image compression",
     "llm": "Translation",
-    "watermark": "Watermark"
+    "watermark": "Watermark",
+    "emby": "Library refresh",
+    "smartstrm": "Cloud delete sync"
   },
   "config": {
     "loadError": "Failed to load configuration"
@@ -604,6 +606,50 @@
       "quality": {
         "label": "Quality",
         "description": "Re-encode quality for JPEG / WebP"
+      }
+    },
+    "emby": {
+      "enabled": {
+        "label": "Enable refresh notification",
+        "description": "Ask Emby to rescan the library once an organize or delete task chain finishes"
+      },
+      "url": {
+        "label": "Emby URL",
+        "description": "For example http://127.0.0.1:8096; include the prefix when behind a sub-path reverse proxy"
+      },
+      "api_key": {
+        "label": "API key",
+        "description": "API key from the Emby dashboard; leave empty to omit the X-Emby-Token header"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Timeout per notification; failures are logged only and never affect the task result"
+      },
+      "debounce_seconds": {
+        "label": "Merge window (s)",
+        "description": "Task chains completing within the window are merged into one refresh; 0 refreshes immediately per chain"
+      }
+    },
+    "smartstrm": {
+      "enabled": {
+        "label": "Enable delete notification",
+        "description": "Notify SmartStrm to delete the cloud source files after media files are deleted"
+      },
+      "webhook_url": {
+        "label": "Webhook URL",
+        "description": "SmartStrm webhook URL, e.g. http://192.168.1.2:8024/webhook/<token>"
+      },
+      "local_root": {
+        "label": "Local mount root",
+        "description": "Mount root that holds the libraries on the Amane side; the whole segment is replaced by the Emby mount root when mapping"
+      },
+      "emby_root": {
+        "label": "Emby mount root",
+        "description": "STRM root that SmartStrm mounts into Emby; must match its strm_in_emby"
+      },
+      "timeout": {
+        "label": "Timeout (s)",
+        "description": "Timeout per notification; failures are logged only and never affect the task result"
       }
     },
     "logging": {

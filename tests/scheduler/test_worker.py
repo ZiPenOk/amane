@@ -580,3 +580,127 @@ async def test_worker_no_followups_on_failure(repo: Repository) -> None:
 
     assert await repo.list_task_links(parent_task_id=t.id) == []
     assert await repo.list_tasks_by_root(t.id) == []
+
+
+class FakeEmby:
+    """结构上满足 EmbyRefresher; 记录被通知的链根."""
+
+    def __init__(self, *, enabled: bool = True) -> None:
+        self.enabled = enabled
+        self.roots: list[int] = []
+
+    async def refresh(self, *, root_task_id: int) -> None:
+        self.roots.append(root_task_id)
+
+
+class FollowupHandler(TaskHandler):
+    """成功并派发一个后继的父任务, 用来构造多任务链."""
+
+    payload_type = dict
+
+    def __init__(self, followup_type: TaskType) -> None:
+        self._followup_type = followup_type
+
+    async def handle(self, payload: dict):
+        return TaskResult(
+            success=True,
+            result={"ok": True},
+            followups=[FollowupTask(key="child", task_type=self._followup_type, payload={"child": True})],
+        )
+
+
+async def wait_idle(worker: AsyncWorker) -> None:
+    """等 worker 把结算路径 (含通知钩子) 走完."""
+    async with asyncio.timeout(LOAD_TOLERANT_TIMEOUT):
+        while worker.active_count > 0:
+            await asyncio.sleep(0.01)
+
+
+async def wait_roots(emby: FakeEmby, count: int = 1) -> None:
+    async with asyncio.timeout(LOAD_TOLERANT_TIMEOUT):
+        while len(emby.roots) < count:
+            await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_notifies_emby_after_organize(repo: Repository) -> None:
+    """裸 ORGANIZE 链结算后请求刷新媒体库一次."""
+    emby = FakeEmby()
+    worker = AsyncWorker(repo=repo, handlers={TaskType.ORGANIZE: SuccessHandler()}, poll_interval=0.05, emby=emby)
+    task = await repo.create_task(TaskType.ORGANIZE, payload={"library_id": 1})
+    assert task.id is not None
+
+    worker.start()
+    await wait_roots(emby)
+    await stop_worker(worker)
+
+    assert emby.roots == [task.id]
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_notifies_emby_only_after_whole_chain(repo: Repository) -> None:
+    """链里还有未结算的任务时不通知; 链尾结束才通知链根."""
+    emby = FakeEmby()
+    child = BlockingHandler()
+    worker = AsyncWorker(
+        repo=repo,
+        handlers={TaskType.REFRESH: FollowupHandler(TaskType.ORGANIZE), TaskType.ORGANIZE: child},
+        poll_interval=0.05,
+        emby=emby,
+    )
+    root = await repo.create_task(TaskType.REFRESH, payload={"library_id": 1})
+    assert root.id is not None
+
+    worker.start()
+    await asyncio.wait_for(child.started.wait(), timeout=LOAD_TOLERANT_TIMEOUT)
+    assert emby.roots == []
+
+    child.release.set()
+    await wait_roots(emby)
+    await stop_worker(worker)
+
+    assert emby.roots == [root.id]
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_skips_emby_for_scrape_chain(repo: Repository) -> None:
+    """链里没有整理 / 删除时不刷新: 刮削只写数据库与图片, 不入库."""
+    emby = FakeEmby()
+    worker = AsyncWorker(repo=repo, handlers={TaskType.SCRAPE: SuccessHandler()}, poll_interval=0.05, emby=emby)
+    await repo.create_task(TaskType.SCRAPE, payload={"number": "EMBY-1"})
+
+    worker.start()
+    await recv(worker, 1)
+    await wait_idle(worker)
+    await stop_worker(worker)
+
+    assert emby.roots == []
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_skips_emby_after_failure(repo: Repository) -> None:
+    emby = FakeEmby()
+    worker = AsyncWorker(repo=repo, handlers={TaskType.DELETE: FailHandler()}, poll_interval=0.05, emby=emby)
+    task = await repo.create_task(TaskType.DELETE, payload={"library_id": 1})
+    assert task.id is not None
+
+    worker.start()
+    await recv(worker, 1)
+    await wait_idle(worker)
+    await stop_worker(worker)
+
+    assert emby.roots == []
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_worker_skips_emby_when_disabled(repo: Repository) -> None:
+    emby = FakeEmby(enabled=False)
+    worker = AsyncWorker(repo=repo, handlers={TaskType.DELETE: SuccessHandler()}, poll_interval=0.05, emby=emby)
+    await repo.create_task(TaskType.DELETE, payload={"library_id": 1})
+
+    worker.start()
+    await recv(worker, 1)
+    await wait_idle(worker)
+    await stop_worker(worker)
+
+    assert emby.roots == []

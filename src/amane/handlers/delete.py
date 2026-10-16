@@ -17,6 +17,7 @@ from ..library import (
     DeleteOutcome,
     DeleteTally,
     InventoryEntry,
+    InventoryEntryKind,
     InventoryReason,
     InventoryStore,
     OrphanScan,
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from ..config import HotSettings
     from ..db.models import Library
     from ..db.repository import Repository
+    from ..smartstrm import DeleteNotifier
 
 logger = structlog.get_logger()
 
@@ -60,12 +62,14 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
         config: HotSettings | None = None,
         *,
         library_locks: LibraryTaskLocks | None = None,
+        smartstrm: DeleteNotifier | None = None,
     ):
         super().__init__(payload_t=DeletePayload, result_t=DeleteResult)
         self._repo = repo
         self._inventory_store = inventory_store
         self._config = config
         self._library_locks = library_locks if library_locks is not None else LibraryTaskLocks()
+        self._smartstrm = smartstrm
 
     async def handle(self, payload: DeletePayload) -> TaskResult[DeleteResult]:
         inventory = self._inventory_store.get(payload.inventory_id)
@@ -123,6 +127,11 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
         probe = _MediaProbe(orphan_scan=orphan_scan) if orphan_scan is not None else None
         tally = DeleteTally()
         removed_paths: list[Path] = []
+        # 远端源文件按已删除的媒体文件对账. 目录条目按构造不含媒体 (残留目录 / 空目录 / 整目录删除
+        # 都逐条展开), 因此只看文件条目.
+        notifier = self._smartstrm if self._smartstrm is not None and self._smartstrm.enabled else None
+        media_extensions = self._media_extensions()
+        removed_media: list[Path] = []
         reverify_rejected = 0
         total = len(targets)
         await self.report_progress(0, total, "delete")
@@ -140,6 +149,12 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
             tally.record(outcome)
             if outcome.status != "failed":
                 removed_paths.append(entry.path)
+                if (
+                    notifier is not None
+                    and entry.kind is not InventoryEntryKind.DIR
+                    and entry.path.suffix.lower() in media_extensions
+                ):
+                    removed_media.append(entry.path)
             elif outcome.error:
                 logger.warning("delete item failed", path=str(entry.path), error=outcome.error)
             await self.report_progress(i, total, entry.path.name)
@@ -152,6 +167,8 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 candidates.update(ancestor_dirs(path, library_root=library_root))
             if candidates:
                 pruned = (await prune_empty_dirs(candidates, library_root=library_root)).removed
+        if notifier is not None and removed_media:
+            await notifier.notify_deleted(removed_media)
         await self.report_progress(total, total, "done")
 
         logger.info(
@@ -182,6 +199,12 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 reverify_rejected=reverify_rejected,
             ),
         )
+
+    def _media_extensions(self) -> frozenset[str]:
+        """通知远端删除时的媒体判据, 与执行前复验取同一份设置."""
+        if self._config is None:
+            return MEDIA_EXTENSIONS
+        return frozenset(self._config.watcher.media_extensions) or MEDIA_EXTENSIONS
 
     def _orphan_scan(
         self,

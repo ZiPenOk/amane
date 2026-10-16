@@ -35,6 +35,12 @@ git log --oneline main..dev
 | 预览图不落盘开关 | `src/amane/api/routes/resources.py` + `ScrapingConfig.cache_preview_images` | 上游改 `ScrapingConfig` / 资源路由时人工合并 |
 | 删除清单补收同名前缀产物 | `src/amane/library/cleanup/footprint.py` | 上游改 `build_footprint` / `_add_products` 时人工合并 |
 | 无码官网来源 (official_uncensored) | `src/amane/crawlers/sites/official_uncensored.py` | 新增文件 + registry 注册 + 无码默认路由; 上游加同名来源时人工合并 |
+| Google 免费翻译 (gtx) | `src/amane/llm/google.py` + `build_translator`, 配置 `LLMConfig.provider` / `google_endpoint` | 上游改 `llm/` 或 `build_translator` 时人工合并 |
+| 全字段翻译 | `src/amane/handlers/scrape.py::_translate_metadata` + `TRANSLATABLE_METADATA_FIELDS` | 上游改翻译步骤时人工合并 |
+| 中字水印按番号配对 | `src/amane/parsing/file_info.py::subtitle_matches_video` + `library/rules.py` / `cleanup/inventory.py` 的调用点 | 上游改水印判定或 `has_companion_subtitle` 时人工合并 |
+| 字幕语言统一 chs/cht | `src/amane/parsing/file_info.py::detect_subtitle_language`, 占位符 `{srt_lang}` | 上游改字幕命名或模板占位符时人工合并 |
+| Emby 媒体库刷新通知 | `src/amane/emby.py` + `AsyncWorker` 结算钩子, 配置 `EmbyConfig` | 新增文件; 上游改 `scheduler/worker.py` 的结算路径时确认钩子仍在 |
+| SmartStrm 远端删除通知 | `src/amane/smartstrm.py` + `handlers/delete.py` 的挂点, 配置 `SmartStrmConfig` | 新增文件; 上游改 `DeleteHandler` 时人工合并 |
 | 自己的镜像构建 | `.github/workflows/build-mine.yml` | 独立文件, 不与上游冲突 |
 | 生成产物重跑 | `.github/workflows/regen-openapi.yml` | 本地跑不了 `pnpm` 时的兜底: Actions 里手动 Run workflow |
 
@@ -88,7 +94,7 @@ git push origin main dev
 
 1. **生成物** (`web/openapi.json`, `web/src/client/*`): 永远不手改. 任取一边, 然后重跑
    `uv run python scripts/export_openapi.py` 与 `cd web && pnpm gen-client`.
-   校验: `git diff main dev -- web/openapi.json web/src/client` 应当只剩本 fork 自己的 schema 差异 (当前只有 `CompressConfig`).
+   校验: `git diff main dev -- web/openapi.json web/src/client` 应当只剩本 fork 自己的 schema 差异 (压缩、翻译、通知等 section 与字段).
 2. **`.github/workflows/*.yml`**: 以上游版本为准. `ci.yaml` 与 `docker.yml` 现在不需要任何本地改动;
    `build-mine.yml` 与 `regen-openapi.yml` 是本 fork 自己的文件, 不会冲突.
 3. **功能代码**: 人工判断; 判断不了就两边都留, 并用对应站点的用例验证.

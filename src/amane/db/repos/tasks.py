@@ -342,6 +342,33 @@ class TasksRepoMixin(RepositoryMixinBase):
             )
             return list(result.all())
 
+    async def root_chain_pending(self, root_task_id: int) -> bool:
+        """链上是否仍有 QUEUED / RUNNING 任务. 全部终态后才算批量完成."""
+        async with self._session() as session:
+            stmt = (
+                select(count())
+                .select_from(Task)
+                .where(col(Task.root_task_id) == root_task_id, col(Task.status).in_(_ACTIVE_STATUSES))
+            )
+            return int((await session.exec(stmt)).one()) > 0
+
+    async def root_chain_has_done(self, root_task_id: int, task_types: Iterable[TaskType]) -> bool:
+        """链上是否存在指定类型的 DONE 任务; 用于确认批量链里确有成功产物."""
+        types = list(task_types)
+        if not types:
+            return False
+        async with self._session() as session:
+            stmt = (
+                select(Task.id)
+                .where(
+                    col(Task.root_task_id) == root_task_id,
+                    col(Task.status) == TaskStatus.DONE,
+                    col(Task.type).in_(types),
+                )
+                .limit(1)
+            )
+            return (await session.exec(stmt)).first() is not None
+
     async def list_children(
         self, parent_task_id: int, *, limit: int | None = None, offset: int = 0
     ) -> list[tuple[Task, str]]:

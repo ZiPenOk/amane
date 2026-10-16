@@ -1080,6 +1080,36 @@ export type DesktopResponse = {
 export type DownloadableResource = 'thumb' | 'poster' | 'extrafanart' | 'trailer';
 
 /**
+ * EmbyConfig
+ *
+ * Emby / Jellyfin 媒体库刷新通知. 任务链里的 ORGANIZE / DELETE 全部结束后触发.
+ *
+ * 见 docs/dev/task-system.md「媒体库刷新」.
+ */
+export type EmbyConfig = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Url
+     */
+    url?: string;
+    /**
+     * Api Key
+     */
+    api_key?: string | null;
+    /**
+     * Timeout
+     */
+    timeout?: number;
+    /**
+     * Debounce Seconds
+     */
+    debounce_seconds?: number;
+};
+
+/**
  * ErrorRow
  *
  * 回合异常; 文案直接进助手气泡.
@@ -1696,6 +1726,8 @@ export type HotSettings = {
     network?: NetworkConfig;
     sr?: SrConfig;
     compress?: CompressConfig;
+    emby?: EmbyConfig;
+    smartstrm?: SmartStrmConfig;
     watermark?: WatermarkConfig;
     llm?: LlmConfig;
     r18?: R18Config;
@@ -4234,6 +4266,36 @@ export type SiteOutcomeRecord = {
  * 都要能独立读懂, 不依赖 ``detail``.
  */
 export type SkipReason = 'unknown_source' | 'no_http_upstream' | 'missing_credential' | 'undeclared' | 'no_url';
+
+/**
+ * SmartStrmConfig
+ *
+ * SmartStrm 远端删除通知: Amane 删除库内媒体文件后同步删除网盘源文件.
+ *
+ * 见 docs/dev/task-system.md「远端删除通知」.
+ */
+export type SmartStrmConfig = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Webhook Url
+     */
+    webhook_url?: string;
+    /**
+     * Local Root
+     */
+    local_root?: string;
+    /**
+     * Emby Root
+     */
+    emby_root?: string;
+    /**
+     * Timeout
+     */
+    timeout?: number;
+};
 
 /**
  * SortOrder

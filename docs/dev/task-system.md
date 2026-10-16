@@ -116,6 +116,29 @@ handler 之间复用的阶段逻辑, 不是一条可跳步的总管线:
 - **面板读取**: 状态接口只给状态与范围, 节点一律走 `inventory/nodes` 按 `offset`/`limit` 取一页 (顶层与下钻同一接口, 回收目录用响应里的 `path` 展开, 同一打开动作的重复请求复用上一次展开) — 一份清单可能有上万条候选, 整份下发会卡住面板. 清单内容生成后不变, 树因此只构建一次 (`library/cleanup/inventory.py::inventory_tree`). 节点路径一律 `/` 分隔, 面板按它做分量匹配; 折叠系统产物时 `has_children` 按过滤后的子节点算, 否则面板会给出展开后为空的行. 遍历设置与当前库配置不一致的清单按不存在处理: 它只覆盖了库的一部分, 面板不该照整库渲染. `will_be_empty` 由扫描自底向上算出, 而不是面板按清单条目推断 (有效媒体不是条目); 面板还要确认该子树里没有被排除的条目, 否则标记预告的是一个不会发生的结果.
 - **不加库列**: 清单与剪枝开关都只存在于任务 payload, 没有需要从库里取真值的读取路径.
 
+## 媒体库刷新与远端删除通知
+
+两个出站通知都只发生在**任务结算之后**, 失败只记日志, 不改任务终态, 也不重试.
+
+**媒体库刷新** (`src/amane/emby.py`, 配置 `emby`): `emby.enabled` 时, 让 Emby 重扫媒体库, 请求为 `POST {emby.url}/Library/Refresh` (API Key 经 `X-Emby-Token` 头), 直连不走代理. 触发条件是**整条任务链结算完毕且链里有成功的 `ORGANIZE` / `DELETE`**:
+
+- 判定在 Worker 结算之后读数据库 (`TasksRepoMixin.root_chain_pending` 与 `root_chain_has_done`), 而不是看收尾任务的类型 — 链尾类型不固定: `REFRESH` → `SCRAPE` → `ORGANIZE` / `ACTOR_SCRAPE` 里最后结束的那个才是链尾;
+- **链级去重**: 同一条链只通知一次, 按根任务 id 记在通知器内, 不会因 `_rebuild()` 换 worker 而重复;
+- **跨链合并**: 文件监控一次拖入多个影片派生的是多条互相独立的链, `emby.debounce_seconds` 窗口内的链合并成一次刷新, 窗口内每来一条链重新计时; 填 `0` 表示每条链各自立即刷新;
+- 通知器挂在 `AppRuntime.emby_notifier` 上跨热重载复用, `set_context` 只换 HTTP 通道与配置; `AppSession.aclose` 取消尚未发出的刷新.
+
+**远端删除通知** (`src/amane/smartstrm.py`, 配置 `smartstrm`): 库内媒体文件被 `DELETE` 删除后, 网盘源文件仍在. `smartstrm.enabled` 时按 SmartStrm 的 Emby 删除同步契约投递 (契约见 <https://smartstrm.github.io/settings/webhook>):
+
+```json
+{"Event": "library.deleted", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm"}}
+```
+
+- 路径按段替换: `smartstrm.local_root` (Amane 侧的挂载根) 换成 `smartstrm.emby_root` (SmartStrm 挂载到 Emby 的根, 须与它的 `strm_in_emby` 一致), 范围外的路径丢弃;
+- 同一父目录只投递一次 — SmartStrm 取 `.strm` 的父目录整目录删除, 多集结号共用一个影片目录时重复投递没有意义;
+- 只有**文件条目**参与: 残留目录与空目录按定义不含媒体, 整目录删除在清单里逐条展开, 因此目录条目不必再展开一次.
+
+方向不重叠: Emby 内的删除由 Emby 自己的通知链路处理 (SmartStrm 的 Emby 删除同步与 StrmAssistant 的深度删除), Amane 只负责在磁盘变化后回收索引; Amane 内的删除反过来通知 SmartStrm.
+
 ## 刮削期资源物化
 
 `ScrapeHandler` 在聚合后、`upsert_metadata` 前调用 `materialize_images` (`src/amane/media/pipeline.py`) — 二进制写入 Resource 目录的主路径, 与是否整理无关:

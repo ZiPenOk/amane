@@ -40,7 +40,7 @@
 ```
 EventBus → 日志 → 来源插件发现 → 主 DB engine + Repository → r18 只读引擎 (可选)
         → RateLimiters → WebClient → HttpClient → CrawlerFactory
-        → ResourceStore → TranslationCache → AgentService → safe_dirs + api_token
+        → ResourceStore → EmbyNotifier → TranslationCache → AgentService → safe_dirs + api_token
         → Handlers → AsyncWorker → CronScheduler → FeedService → WatcherService
 ```
 
@@ -49,10 +49,11 @@ EventBus → 日志 → 来源插件发现 → 主 DB engine + Repository → r1
 - **来源插件在网络栈之前发现**: descriptor 提供来源 URL、多语言能力与默认速率, 配置中的外部来源 ID 须先经当前插件目录校验再构造 `CrawlerFactory`; 目录替换经由同一套 `_rebuild()`, 见 [plugins.md](plugins.md).
 - **CrawlerFactory 缓存爬虫实例**, 只在 `HttpClient` 更换后才需重建.
 - **Handlers 在 Worker 之前**: Worker 启动后立即 claim 任务, handler map 必须已就位.
+- **EmbyNotifier 在 Worker 之前**: 任务结算后要经它请求媒体库刷新, 且它与 Worker 共用同一个 WebClient; 跨 rebuild 复用同一实例 (见 [task-system.md](task-system.md)).
 - **PlaybackFactory 在插件目录之后**: 播放源只来自插件, 反代经由独立流式客户端, rebuild 时替换并关闭旧客户端.
 - **CronScheduler / FeedService / WatcherService 在 Worker 之后**: 三者都会派生任务.
 
-停机时 lifespan `aclose` **先** `EventBus.close_all()` 再停 worker, 否则常驻 WS 会拖死 uvicorn graceful. 重启不是进程内 exec: 服务以退出码 3 退出 (避开 argparse 的 2), 由进程外监督者再次启动 (桌面壳的监督循环, Docker `unless-stopped`). uvicorn 的启动失败码同为 3, `amane.server.main` 将其改写为 4 供监督者区分启动失败与请求重启. Docker 不区分退出码, 容器内两种退出仍会再次启动, `docker stop` 发送 SIGTERM 则 `exit 0`. 仅 `AMANE_SUPERVISED=1` 时重启端点可用, 见 [desktop.md](desktop.md) / [config.md](config.md).
+停机时 lifespan `aclose` **先** `EventBus.close_all()` 再停 worker, 否则常驻 WS 会拖死 uvicorn graceful. `EmbyNotifier.aclose()` 在关闭 HTTP 通道前取消尚未发出的刷新 (合并窗口内的待发请求). 重启不是进程内 exec: 服务以退出码 3 退出 (避开 argparse 的 2), 由进程外监督者再次启动 (桌面壳的监督循环, Docker `unless-stopped`). uvicorn 的启动失败码同为 3, `amane.server.main` 将其改写为 4 供监督者区分启动失败与请求重启. Docker 不区分退出码, 容器内两种退出仍会再次启动, `docker stop` 发送 SIGTERM 则 `exit 0`. 仅 `AMANE_SUPERVISED=1` 时重启端点可用, 见 [desktop.md](desktop.md) / [config.md](config.md).
 
 ## 跨切面
 

@@ -709,11 +709,8 @@ class LLMConfig(BaseModel):
     rate_limit: float = Field(default=2.0, ge=0.1, le=100)
     """与站点限速隔离; LLM 与 Google 共用."""
 
-    google_api_key: str | None = None
-    """Google Cloud Translation API 密钥; provider=google 时为空即不翻译."""
-
-    google_endpoint: str = "https://translation.googleapis.com/language/translate/v2"
-    """Google Cloud Translation Basic v2 端点; 可指向兼容镜像."""
+    google_endpoint: str = "https://translate.google.com/translate_a/single"
+    """Google 免费 gtx 端点; 可改为 translate.googleapis.com 或兼容镜像, 不需要密钥."""
 
     @field_validator("system_prompt")
     @classmethod

@@ -1,16 +1,14 @@
-"""Google Cloud Translation Basic v2 翻译器.
+"""Google 免费 gtx 翻译器.
 
-一个字段一次请求: ``q`` 单元素数组, ``source=auto`` (省略), ``target`` 由 ``Language`` 映射.
-返回文本可能含 HTML 实体 (``&#39;`` 等), 统一 ``html.unescape`` 后写入. 已是目标语言或结果与原文相同返回
-``None``, 调用方保留原值. 译文写入 ``TranslationCache``, 缓存键以端点标识区分 provider.
+请求 ``translate_a/single?client=gtx&sl=auto&dt=t&q=...``, 不依赖 API key. 默认端点为
+``translate.google.com``, 可改为 ``translate.googleapis.com`` 或兼容镜像. 一个字段一次请求;
+响应是嵌套数组, 取 ``response[0][*][0]`` 拼接为译文. 已是目标语言或结果与原文相同返回 ``None``,
+调用方保留原值. 译文写入 ``TranslationCache``, 缓存键以端点标识区分 provider.
 """
-
-import html
 
 import structlog
 from aiolimiter import AsyncLimiter
 from httpx2 import AsyncClient
-from pydantic import BaseModel
 
 from ..enums import Language, MetadataField
 from .cache import TranslationCache
@@ -25,29 +23,32 @@ _GOOGLE_TARGET: dict[Language, str] = {
 }
 
 
-class _Translation(BaseModel):
-    translatedText: str
-
-
-class _TranslationData(BaseModel):
-    translations: list[_Translation]
-
-
-class _TranslationResponse(BaseModel):
-    data: _TranslationData
+def _extract_translation(payload: object) -> str | None:
+    """解析 gtx 嵌套数组: ``[[["译文", "原文", ...], ...], ...]``. 空或形状异常返回 ``None``."""
+    if not isinstance(payload, list) or not payload:
+        return None
+    segments = payload[0]
+    if not isinstance(segments, list):
+        return None
+    translated = (
+        "".join(
+            segment[0] for segment in segments if isinstance(segment, list) and segment and isinstance(segment[0], str)
+        )
+        .replace("＃", "#")
+        .strip()
+    )
+    return translated or None
 
 
 class GoogleTranslator:
     def __init__(
         self,
         *,
-        api_key: str,
         endpoint: str,
         http_client: AsyncClient,
         cache: TranslationCache | None = None,
         rate_limit: float = 2.0,
     ) -> None:
-        self._api_key = api_key
         self._endpoint = endpoint
         self._http_client = http_client
         self._cache = cache
@@ -75,16 +76,13 @@ class GoogleTranslator:
 
     async def _ask(self, text: str, target: Language) -> str | None:
         """单次请求; 失败或响应为空时返回 ``None``, 不抛异常."""
-        payload = {"q": [text], "target": _GOOGLE_TARGET[target], "format": "text"}
+        params = {"client": "gtx", "sl": "auto", "tl": _GOOGLE_TARGET[target], "dt": "t", "q": text}
         async with self._limiter:
             try:
-                response = await self._http_client.post(self._endpoint, params={"key": self._api_key}, json=payload)
+                response = await self._http_client.get(self._endpoint, params=params)
                 response.raise_for_status()
-                data = _TranslationResponse.model_validate(response.json())
+                payload = response.json()
             except Exception as e:
                 logger.warning("Google translation request failed", error=str(e))
                 return None
-        if not data.data.translations:
-            return None
-        # Google 会转义引号 / 撇号等 HTML 实体, 入库前还原为纯文本.
-        return html.unescape(data.data.translations[0].translatedText).strip() or None
+        return _extract_translation(payload)

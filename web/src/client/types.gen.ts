@@ -1950,10 +1950,6 @@ export type LlmConfig = {
      */
     rate_limit?: number;
     /**
-     * Google Api Key
-     */
-    google_api_key?: string | null;
-    /**
      * Google Endpoint
      */
     google_endpoint?: string;

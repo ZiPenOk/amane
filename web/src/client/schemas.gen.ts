@@ -3402,7 +3402,7 @@ export const HotSettingsSchema = {
                 base_url: 'https://api.openai.com/v1',
                 model: '',
                 rate_limit: 2,
-                google_endpoint: 'https://translation.googleapis.com/language/translate/v2'
+                google_endpoint: 'https://translate.google.com/translate_a/single'
             }
         },
         r18: {
@@ -3896,21 +3896,10 @@ export const LLMConfigSchema = {
             title: 'Rate Limit',
             default: 2
         },
-        google_api_key: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Google Api Key'
-        },
         google_endpoint: {
             type: 'string',
             title: 'Google Endpoint',
-            default: 'https://translation.googleapis.com/language/translate/v2'
+            default: 'https://translate.google.com/translate_a/single'
         }
     },
     type: 'object',

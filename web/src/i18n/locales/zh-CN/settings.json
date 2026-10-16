@@ -631,7 +631,7 @@
         "label": "翻译服务",
         "options": {
           "llm": "LLM",
-          "google": "Google"
+          "google": "Google (免费)"
         }
       },
       "api_key": {
@@ -656,13 +656,9 @@
       "rate_limit": {
         "label": "每秒请求上限"
       },
-      "google_api_key": {
-        "label": "Google API 密钥",
-        "description": "Google Cloud Translation API 密钥"
-      },
       "google_endpoint": {
         "label": "Google 端点",
-        "description": "Cloud Translation Basic v2 端点, 可指向兼容镜像"
+        "description": "免费 gtx 接口; 默认 translate.google.com, 可改为 translate.googleapis.com"
       },
       "translate_fields": {
         "label": "翻译字段",

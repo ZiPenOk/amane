@@ -1,10 +1,8 @@
-"""Google Cloud Translation 翻译器单元测试.
+"""Google 免费 gtx 翻译器单元测试.
 
-请求经 ``httpx2.MockTransport`` 驱动, 不触网. 覆盖: 请求形状与目标语言映射、HTML 实体还原、
-空 / 同文结果、失败降级、缓存去重与 ``build_translator`` 开关.
+请求经 ``httpx2.MockTransport`` 驱动, 不触网. 覆盖: GET 参数与目标语言映射、嵌套数组解析、
+全角井号还原、空 / 同文结果、失败降级、缓存去重与 ``build_translator`` 开关.
 """
-
-import json
 
 import httpx2
 import pytest
@@ -19,13 +17,12 @@ def _client(handler) -> httpx2.AsyncClient:
 
 
 def _ok(text: str) -> httpx2.Response:
-    return httpx2.Response(200, json={"data": {"translations": [{"translatedText": text}]}})
+    return httpx2.Response(200, json=[[[text, "source", None, None, 10]], None, "en"])
 
 
 def _translator(client: httpx2.AsyncClient, cache: TranslationCache | None = None) -> GoogleTranslator:
     return GoogleTranslator(
-        api_key="test-key",
-        endpoint="https://example.test/translate",
+        endpoint="https://example.test/translate_a/single",
         http_client=client,
         cache=cache,
         rate_limit=100.0,
@@ -33,34 +30,34 @@ def _translator(client: httpx2.AsyncClient, cache: TranslationCache | None = Non
 
 
 @pytest.mark.asyncio
-async def test_google_translate_returns_text():
-    seen: dict[str, object] = {}
+async def test_google_translate_returns_text_and_sends_params():
+    seen: dict[str, str] = {}
 
     def handler(request: httpx2.Request) -> httpx2.Response:
         seen["url"] = str(request.url)
-        seen["body"] = json.loads(request.content)
         return _ok("你好")
 
     client = _client(handler)
     t = _translator(client)
     assert await t.translate("Hello", Language.ZH_CN, MetadataField.TITLE) == "你好"
-    assert "key=test-key" in str(seen["url"])
-    assert seen["body"] == {"q": ["Hello"], "target": "zh-CN", "format": "text"}
+    assert "client=gtx" in seen["url"]
+    assert "tl=zh-CN" in seen["url"]
+    assert "q=Hello" in seen["url"]
     await client.aclose()
 
 
 @pytest.mark.asyncio
-async def test_google_translate_maps_language_and_unescapes_html():
-    seen: list[dict[str, object]] = []
+async def test_google_translate_maps_language_and_restores_hash():
+    seen: list[str] = []
 
     def handler(request: httpx2.Request) -> httpx2.Response:
-        seen.append(json.loads(request.content))
-        return _ok("&quot;你好&quot; &#39;世界&#39;")
+        seen.append(str(request.url))
+        return _ok("＃1 作品")
 
     client = _client(handler)
     t = _translator(client)
-    assert await t.translate("Hello", Language.ZH_TW, MetadataField.PLOT) == "\"你好\" '世界'"
-    assert seen[0]["target"] == "zh-TW"
+    assert await t.translate("Hello", Language.ZH_TW, MetadataField.PLOT) == "#1 作品"
+    assert "tl=zh-TW" in seen[0]
     await client.aclose()
 
 
@@ -83,9 +80,20 @@ async def test_google_translate_skips_empty_and_unchanged():
 
 
 @pytest.mark.asyncio
+async def test_google_translate_malformed_payload_returns_none():
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"unexpected": True})
+
+    client = _client(handler)
+    t = _translator(client)
+    assert await t.translate("Hello", Language.ZH_CN, MetadataField.TITLE) is None
+    await client.aclose()
+
+
+@pytest.mark.asyncio
 async def test_google_translate_failure_returns_none():
     def handler(request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(500, json={"error": {"message": "blocked"}})
+        return httpx2.Response(500, text="blocked")
 
     client = _client(handler)
     t = _translator(client)
@@ -113,15 +121,14 @@ async def test_google_translator_uses_cache(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "enabled,key,expected_none",
+    "enabled,endpoint,expected_none",
     [
-        (False, "key", True),  # 未启用
-        (True, None, True),  # 缺 Google 密钥
-        (True, "", True),  # 空 Google 密钥
-        (True, "key", False),  # 正常装配
+        (False, "https://example.test/translate_a/single", True),  # 未启用
+        (True, "", True),  # 端点为空
+        (True, "https://example.test/translate_a/single", False),  # 正常装配
     ],
 )
-def test_build_translator_google_gating(monkeypatch, enabled, key, expected_none):
+def test_build_translator_google_gating(monkeypatch, enabled, endpoint, expected_none):
     class DummyClient:
         pass
 
@@ -134,7 +141,7 @@ def test_build_translator_google_gating(monkeypatch, enabled, key, expected_none
         base_url="https://api.openai.com/v1",
         model="gpt-4o-mini",
         rate_limit=2.0,
-        google_api_key=key,
+        google_endpoint=endpoint,
     )
     assert (t is None) == expected_none
 
@@ -158,8 +165,7 @@ def test_build_translator_google_carries_proxy(monkeypatch):
         base_url="https://api.openai.com/v1",
         model="gpt-4o-mini",
         rate_limit=2.0,
-        google_api_key="google-key",
-        google_endpoint="https://mirror.test/translate",
+        google_endpoint="https://mirror.test/translate_a/single",
         proxy="http://proxy.example:8080",
     )
     assert t is not None

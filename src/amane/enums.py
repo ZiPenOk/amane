@@ -64,7 +64,7 @@ class ApiType(StrEnum):
     ANTHROPIC = "anthropic"
 
 
-# 翻译服务: LLM 经 pydantic-ai; Google 走 Cloud Translation Basic v2.
+# 翻译服务: LLM 经 pydantic-ai; Google 走免密钥 gtx 端点.
 class TranslationProvider(StrEnum):
     LLM = "llm"
     GOOGLE = "google"

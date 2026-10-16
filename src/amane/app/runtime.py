@@ -512,7 +512,6 @@ def build_handlers(
         base_url=hot.llm.base_url,
         model=hot.llm.model,
         rate_limit=hot.llm.rate_limit,
-        google_api_key=hot.llm.google_api_key,
         google_endpoint=hot.llm.google_endpoint,
         proxy=hot.network.proxy,
         system_prompt=hot.llm.system_prompt,

@@ -631,7 +631,7 @@
         "label": "Translation Provider",
         "options": {
           "llm": "LLM",
-          "google": "Google"
+          "google": "Google (free)"
         }
       },
       "api_key": {
@@ -656,13 +656,9 @@
       "rate_limit": {
         "label": "Max requests per second"
       },
-      "google_api_key": {
-        "label": "Google API Key",
-        "description": "Google Cloud Translation API key"
-      },
       "google_endpoint": {
         "label": "Google Endpoint",
-        "description": "Cloud Translation Basic v2 endpoint; can point to a compatible mirror"
+        "description": "Free gtx endpoint; default translate.google.com, can switch to translate.googleapis.com"
       },
       "translate_fields": {
         "label": "Fields to Translate",

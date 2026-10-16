@@ -1,8 +1,8 @@
-"""LLM 翻译器与 ``build_translator`` provider 装配.
+"""翻译器与 ``build_translator`` provider 装配.
 
 LLM 路径跨语系经缓存后经 pydantic-ai ``Model`` 翻译; title / plot 的中文简繁经 ``zhconv``, 不经 LLM、不写入缓存.
-词级字段不套用句子级启发式, 避免漏译日文汉字词. 已是目标语言或结果与原文相同返回 ``None``.
-``build_translator`` 在 enabled=False 或缺对应 provider 密钥时返回 ``None``.
+Google 路径经免密钥 gtx 端点. 词级字段不套用句子级启发式, 避免漏译日文汉字词. 已是目标语言或结果与原文相同返回 ``None``.
+``build_translator`` 在 enabled=False、LLM 缺 api_key 或 Google 端点为空白时返回 ``None``.
 """
 
 import re
@@ -190,8 +190,7 @@ def build_translator(
     model: str,
     rate_limit: float,
     provider: TranslationProvider = TranslationProvider.LLM,
-    google_api_key: str | None = None,
-    google_endpoint: str = "https://translation.googleapis.com/language/translate/v2",
+    google_endpoint: str = "https://translate.google.com/translate_a/single",
     proxy: str | None = None,
     system_prompt: str | None = None,
     field_prompts: Mapping[MetadataField, str] | None = None,
@@ -202,11 +201,10 @@ def build_translator(
         return None
     # 翻译路径自建传输客户端 (proxy + 超时); LLM 交给 provider, Google 直接复用.
     if provider == TranslationProvider.GOOGLE:
-        if not google_api_key:
+        if not google_endpoint:
             return None
         http_client = AsyncClient(proxy=proxy, timeout=Timeout(_TIMEOUT), follow_redirects=True)
         return GoogleTranslator(
-            api_key=google_api_key,
             endpoint=google_endpoint,
             http_client=http_client,
             cache=cache,

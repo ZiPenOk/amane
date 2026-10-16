@@ -726,10 +726,10 @@ class TestLLMConfig:
             mgr.update({"llm": {"api_type": "bogus"}})
 
     def test_provider_default_and_round_trip(self, mgr: ConfigManager):
-        """默认 llm; 切到 google 后凭据与端点随 TOML 往返."""
+        """默认 llm; 切到 google 后端点随 TOML 往返."""
         assert mgr.hot.llm.provider is TranslationProvider.LLM
 
-        mgr.update({"llm": {"provider": "google", "google_api_key": "google-key"}})
+        mgr.update({"llm": {"provider": "google", "google_endpoint": "https://mirror.test/translate_a/single"}})
         reloaded = ConfigManager.with_cold(mgr.cold)
         assert reloaded.hot.llm.provider is TranslationProvider.GOOGLE
-        assert reloaded.hot.llm.google_api_key == "google-key"
+        assert reloaded.hot.llm.google_endpoint == "https://mirror.test/translate_a/single"

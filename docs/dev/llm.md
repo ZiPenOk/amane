@@ -8,14 +8,14 @@
 翻译经 `Translator` 协议接入; `llm.provider` 选择实现:
 
 - **LLM**: `llm/translator.py::LLMTranslator` 经 pydantic-ai 接入上游. `llm/model.py::build_model` 按 `ApiType` (chat / response / anthropic) 构造 `Model`, 与助理共用 provider 映射, 但凭据与配置各自独立 (见 [agent.md](agent.md)).
-- **Google**: `llm/google.py::GoogleTranslator` 直接请求 Cloud Translation Basic v2 (`llm.google_endpoint`), `llm.google_api_key` 作 API key. 一次字段一次请求, 响应先 `html.unescape` 再入库.
+- **Google**: `llm/google.py::GoogleTranslator` 请求免密钥 gtx 端点 (`llm.google_endpoint`, 默认 `https://translate.google.com/translate_a/single`). 一次字段一次 GET, 解析嵌套数组 `response[0][*][0]` 并还原全角 `＃`.
 
 共同约束:
 
 - **单轮调用**: LLM 请求经 `pydantic_ai.direct.model_request` 发出并取 `ModelResponse.text` — 该属性只拼接文本部分, 推理模型写在 `ThinkingPart` 的思维链天然排除; 写进正文的 `<think>` 块由翻译器剥离.
-- **传输客户端归属**: 翻译路径自建 `httpx.AsyncClient` (超时 60 秒, 代理取 `network.proxy`); LLM 交给 provider, Google 自己持有.
+- **传输客户端归属**: 翻译路径自建 `httpx.AsyncClient` (超时 60 秒, 代理取 `network.proxy`); LLM 交给 provider, Google 自己持有. 免费 gtx 端点经该代理出站.
 - **失败不阻断刮削**: 重试由 SDK 按其默认策略承担. 失败或正文为空时翻译器返回 `None`, 调用方保留原值.
-- **独立限速**: 每个 provider 用自己的 `AsyncLimiter`, 与站点 host 限速器隔离. `llm.rate_limit` 两条路径共用.
+- **独立限速**: 每个 provider 用自己的 `AsyncLimiter`, 与站点 host 限速器隔离. `llm.rate_limit` 两条路径共用; 免费端点被限流时降低该值.
 
 ### dspy 边界
 

@@ -663,6 +663,18 @@ class CompressConfig(BaseModel):
     """重编码质量 (JPEG / WEBP)."""
 
 
+class CleanupConfig(BaseModel):
+    """删除文件后的连带清理. DELETE 任务读取; 见 docs/dev/task-system.md「清理清单」."""
+
+    delete_metadata_when_last_file_removed: bool = False
+    """最后一份文件被删除后是否连元数据条目一起删掉.
+
+    元数据是番号级一等条目, 有效性不依赖本地文件 (可以只囤元数据), 因此默认关; 打开后
+    DELETE 结束时删掉本次被删光文件的条目, 评论与用户标签挂载随之清理, 封面等图片由 CLEANUP 回收.
+    仍有其它文件的条目保留.
+    """
+
+
 class EmbyConfig(BaseModel):
     """Emby / Jellyfin 媒体库刷新通知. 任务链里的 ORGANIZE / DELETE 全部结束后触发.
 
@@ -902,6 +914,7 @@ class HotSettings(BaseModel):
 
     scraping: ScrapingConfig = ScrapingConfig()
     actor_scraping: ActorScrapingConfig = ActorScrapingConfig()
+    cleanup: CleanupConfig = CleanupConfig()
     agent: AgentConfig = AgentConfig()
     network: NetworkConfig = NetworkConfig()
     sr: SrConfig = SrConfig()

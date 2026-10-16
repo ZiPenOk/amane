@@ -3,6 +3,7 @@
   "tabs": {
     "scraping": "影片刮削",
     "actor_scraping": "演员刮削",
+    "cleanup": "清理",
     "agent": "智能体",
     "network": "网络",
     "worker": "任务引擎",
@@ -606,6 +607,12 @@
       "quality": {
         "label": "质量",
         "description": "JPEG / WebP 的重编码质量"
+      }
+    },
+    "cleanup": {
+      "delete_metadata_when_last_file_removed": {
+        "label": "删光文件后同时删除元数据",
+        "description": "删除任务结束时连元数据条目一起删掉 (只对最后一份文件被删的条目生效); 不可撤销, 评论与用户标签挂载同时清理"
       }
     },
     "emby": {

@@ -692,6 +692,18 @@ export type CancelledRow = {
 };
 
 /**
+ * CleanupConfig
+ *
+ * 删除文件后的连带清理. DELETE 任务读取; 见 docs/dev/task-system.md「清理清单」.
+ */
+export type CleanupConfig = {
+    /**
+     * Delete Metadata When Last File Removed
+     */
+    delete_metadata_when_last_file_removed?: boolean;
+};
+
+/**
  * CleanupResult
  */
 export type CleanupResult = {
@@ -1008,6 +1020,10 @@ export type DeleteResult = {
      * Indexed
      */
     indexed?: number;
+    /**
+     * Metadata Removed
+     */
+    metadata_removed?: number;
     /**
      * Reverify Rejected
      */
@@ -1722,6 +1738,7 @@ export type HealthResponse = {
 export type HotSettings = {
     scraping?: ScrapingConfig;
     actor_scraping?: ActorScrapingConfig;
+    cleanup?: CleanupConfig;
     agent?: AgentConfig;
     network?: NetworkConfig;
     sr?: SrConfig;

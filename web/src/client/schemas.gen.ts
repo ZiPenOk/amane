@@ -1253,6 +1253,19 @@ export const CancelledRowSchema = {
     description: '回合被显式终止.'
 } as const;
 
+export const CleanupConfigSchema = {
+    properties: {
+        delete_metadata_when_last_file_removed: {
+            type: 'boolean',
+            title: 'Delete Metadata When Last File Removed',
+            default: false
+        }
+    },
+    type: 'object',
+    title: 'CleanupConfig',
+    description: '删除文件后的连带清理. DELETE 任务读取; 见 docs/dev/task-system.md「清理清单」.'
+} as const;
+
 export const CleanupResultSchema = {
     properties: {
         type: {
@@ -1724,6 +1737,11 @@ export const DeleteResultSchema = {
         indexed: {
             type: 'integer',
             title: 'Indexed',
+            default: 0
+        },
+        metadata_removed: {
+            type: 'integer',
+            title: 'Metadata Removed',
             default: 0
         },
         reverify_rejected: {
@@ -3363,6 +3381,12 @@ export const HotSettingsSchema = {
                 download_images: true,
                 auto_scrape: true,
                 gfriends_repo: 'https://github.com/gfriends/gfriends'
+            }
+        },
+        cleanup: {
+            $ref: '#/components/schemas/CleanupConfig',
+            default: {
+                delete_metadata_when_last_file_removed: false
             }
         },
         agent: {

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from amane.config import HotSettings
+from amane.config import CleanupConfig, HotSettings
 from amane.handlers import DeleteHandler, DeletePayload, ScanInvalidHandler, ScanInvalidPayload
 from amane.handlers import delete as delete_module
 from amane.library import ORPHAN_COOLDOWN_SECONDS, DeleteOutcome, InventoryStore, OrphanScan
@@ -836,3 +836,86 @@ async def test_delete_does_not_notify_targets_that_failed(
     assert result.result is not None
     assert result.result.failed == 2
     assert notifier.paths == []
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_delete_removes_metadata_with_last_file(repo: Repository, tmp_path: Path) -> None:
+    """开关打开: 最后一份文件被删的元数据条目一并清理, 结果里计数."""
+    lib_root = tmp_path / "lib"
+    lib_root.mkdir(parents=True)
+    lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=["ABC-123"])
+    assert lib.id is not None
+    meta = await repo.upsert_metadata(number="ABC-123", title="bound")
+    assert meta.id is not None
+    target = lib_root / "ABC-123.strm"
+    target.write_bytes(b"x" * 10)
+    await repo.create_media_file(lib.id, path=str(target), number="ABC-123", metadata_id=meta.id)
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, lib.id)
+    config = HotSettings(cleanup=CleanupConfig(delete_metadata_when_last_file_removed=True))
+
+    result = await DeleteHandler(repo, store, config).handle(
+        DeletePayload(library_id=lib.id, inventory_id=inventory_id)
+    )
+
+    assert result.success is True
+    assert result.result is not None
+    assert result.result.metadata_removed == 1
+    assert await repo.get_metadata(meta.id) is None
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_delete_keeps_metadata_with_other_files(repo: Repository, tmp_path: Path) -> None:
+    """开关打开也只删被删光文件的条目: 还有别的拷贝就留着."""
+    lib_root = tmp_path / "lib"
+    lib_root.mkdir(parents=True)
+    # 黑名单只命中 strm: 另一份拷贝不参与本次删除.
+    lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=[r"\.strm$"])
+    assert lib.id is not None
+    meta = await repo.upsert_metadata(number="ABC-123", title="bound")
+    assert meta.id is not None
+    dooms = lib_root / "ABC-123.strm"
+    dooms.write_bytes(b"x" * 10)
+    keeper = lib_root / "ABC-123-uncensored.mp4"
+    keeper.write_bytes(b"y" * 10)
+    await repo.create_media_file(lib.id, path=str(dooms), number="ABC-123", metadata_id=meta.id)
+    await repo.create_media_file(lib.id, path=str(keeper), number="ABC-123", metadata_id=meta.id)
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, lib.id)
+    config = HotSettings(cleanup=CleanupConfig(delete_metadata_when_last_file_removed=True))
+
+    result = await DeleteHandler(repo, store, config).handle(
+        DeletePayload(library_id=lib.id, inventory_id=inventory_id)
+    )
+
+    assert result.success is True
+    assert result.result is not None
+    assert result.result.metadata_removed == 0
+    assert await repo.get_metadata(meta.id) is not None
+    assert keeper.exists()
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_delete_keeps_metadata_when_switch_off(repo: Repository, tmp_path: Path) -> None:
+    """默认关: 只删磁盘与文件索引, 元数据条目原地不动."""
+    lib_root = tmp_path / "lib"
+    lib_root.mkdir(parents=True)
+    lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=["ABC-123"])
+    assert lib.id is not None
+    meta = await repo.upsert_metadata(number="ABC-123", title="bound")
+    assert meta.id is not None
+    target = lib_root / "ABC-123.strm"
+    target.write_bytes(b"x" * 10)
+    await repo.create_media_file(lib.id, path=str(target), number="ABC-123", metadata_id=meta.id)
+    store = InventoryStore()
+    inventory_id = await _inventory_id(repo, store, lib.id)
+
+    result = await DeleteHandler(repo, store, HotSettings()).handle(
+        DeletePayload(library_id=lib.id, inventory_id=inventory_id)
+    )
+
+    assert result.success is True
+    assert result.result is not None
+    assert result.result.metadata_removed == 0
+    assert result.result.indexed == 1
+    assert await repo.get_metadata(meta.id) is not None

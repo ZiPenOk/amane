@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
@@ -159,7 +159,7 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 logger.warning("delete item failed", path=str(entry.path), error=outcome.error)
             await self.report_progress(i, total, entry.path.name)
 
-        indexed = await self._delete_index_rows(inventory.library_id, removed_paths)
+        indexed, orphan_metadata = await self._delete_index_rows(inventory.library_id, removed_paths)
         pruned = 0
         if payload.prune_empty_dirs and removed_paths:
             candidates: set[Path] = set()
@@ -167,6 +167,7 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 candidates.update(ancestor_dirs(path, library_root=library_root))
             if candidates:
                 pruned = (await prune_empty_dirs(candidates, library_root=library_root)).removed
+        metadata_removed = await self._delete_orphan_metadata(orphan_metadata)
         if notifier is not None and removed_media:
             await notifier.notify_deleted(removed_media)
         await self.report_progress(total, total, "done")
@@ -183,6 +184,7 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
             pruned_dirs=pruned,
             excluded=excluded,
             indexed=indexed,
+            metadata_removed=metadata_removed,
             reverify_rejected=reverify_rejected,
         )
         return TaskResult(
@@ -196,6 +198,7 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 pruned_dirs=pruned,
                 excluded=excluded,
                 indexed=indexed,
+                metadata_removed=metadata_removed,
                 reverify_rejected=reverify_rejected,
             ),
         )
@@ -232,18 +235,41 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
             media_extensions=media_extensions,
         )
 
-    async def _delete_index_rows(self, library_id: int, targets: Sequence[Path]) -> int:
-        """按路径删除已删目标的索引行; 目录目标按前缀. 不触碰 Metadata."""
+    async def _delete_index_rows(self, library_id: int, targets: Sequence[Path]) -> tuple[int, set[int]]:
+        """按路径删除已删目标的索引行; 目录目标按前缀.
+
+        返回随行删除的行数与这些行绑定的元数据 id; 元数据本身留到调用方按开关决定, 本方法不触碰它.
+        """
         if not targets:
-            return 0
+            return 0, set()
         keys = _path_keys(targets, root=None)
         removed = 0
+        metadata_ids: set[int] = set()
         for media in await self._repo.list_media_files(library_id=library_id, limit=None):
             if media.id is None:
                 continue
             if _matches(media.path, exact=keys, subtrees=keys):
+                if media.metadata_id is not None:
+                    metadata_ids.add(media.metadata_id)
                 await self._repo.delete_media_file(media.id)
                 removed += 1
+        return removed, metadata_ids
+
+    async def _delete_orphan_metadata(self, metadata_ids: Iterable[int]) -> int:
+        """清理本次被删光文件的元数据条目; 开关关闭时不做任何事.
+
+        仍有其它文件的条目保留: 一个番号可以挂多份拷贝, 删掉其中一份不代表这部片不要了.
+        删除的级联 (评论 / 用户标签挂载 / 文件绑定置空) 由 ``Repository.delete_metadata`` 负责.
+        """
+        if self._config is None or not self._config.cleanup.delete_metadata_when_last_file_removed:
+            return 0
+        removed = 0
+        for metadata_id in sorted(metadata_ids):
+            if await self._repo.list_media_files(metadata_ids=[metadata_id], limit=1):
+                continue
+            if await self._repo.delete_metadata(metadata_id):
+                removed += 1
+                logger.info("metadata removed with last file", metadata_id=metadata_id)
         return removed
 
 

@@ -12,6 +12,7 @@ from amane.app.bootstrap import build_safe_dirs
 from amane.config import (
     SAFE_DIRS_ALLOW_ALL,
     BrowserConfig,
+    CleanupConfig,
     ColdSettings,
     ConfigManager,
     DownloadableResource,
@@ -788,3 +789,18 @@ class TestNotificationConfig:
     def test_timeout_out_of_range(self, value: float) -> None:
         with pytest.raises(ValidationError):
             SmartStrmConfig(timeout=value)
+
+
+class TestCleanupConfig:
+    """cleanup 段: 删除文件后的连带清理, 默认关."""
+
+    def test_default_is_off(self) -> None:
+        assert CleanupConfig().delete_metadata_when_last_file_removed is False
+        assert HotSettings().cleanup.delete_metadata_when_last_file_removed is False
+
+    def test_round_trip(self, mgr: ConfigManager) -> None:
+        mgr.update({"cleanup": {"delete_metadata_when_last_file_removed": True}})
+
+        reloaded = ConfigManager.with_cold(mgr.cold)
+
+        assert reloaded.hot.cleanup.delete_metadata_when_last_file_removed is True

@@ -3,6 +3,7 @@
   "tabs": {
     "scraping": "Movie Scraping",
     "actor_scraping": "Actor Scraping",
+    "cleanup": "Cleanup",
     "agent": "Agent",
     "network": "Network",
     "worker": "Task Engine",
@@ -606,6 +607,12 @@
       "quality": {
         "label": "Quality",
         "description": "Re-encode quality for JPEG / WebP"
+      }
+    },
+    "cleanup": {
+      "delete_metadata_when_last_file_removed": {
+        "label": "Delete metadata with its last file",
+        "description": "Remove the metadata entry once the delete task takes its last file; irreversible, and comments and user tags go with it"
       }
     },
     "emby": {

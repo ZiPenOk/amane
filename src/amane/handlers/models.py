@@ -246,6 +246,9 @@ class DeleteResult(BaseModel):
     """因排除项而不删除、且未被纳入项恢复的清单条目数."""
     indexed: int = 0
     """随之删除的 MediaFile 行数."""
+
+    metadata_removed: int = 0
+    """随之清理的元数据条目数; `cleanup.delete_metadata_when_last_file_removed` 关闭时恒为 0."""
     reverify_rejected: int = 0
     """执行前复验未通过的条目数; 拒绝原因见 `delete.py::_reverify` (目录里出现媒体 / 未识别的
     文件 / 下载进度, 目录不再为空或无法读取), 这些条目同时计入 `failed`."""

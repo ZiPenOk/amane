@@ -41,6 +41,7 @@ git log --oneline main..dev
 | 字幕语言统一 chs/cht | `src/amane/parsing/file_info.py::detect_subtitle_language`, 占位符 `{srt_lang}` | 上游改字幕命名或模板占位符时人工合并 |
 | Emby 媒体库刷新通知 | `src/amane/emby.py` + `AsyncWorker` 结算钩子, 配置 `EmbyConfig` | 新增文件; 上游改 `scheduler/worker.py` 的结算路径时确认钩子仍在 |
 | SmartStrm 远端删除通知 | `src/amane/smartstrm.py` + `handlers/delete.py` 的挂点, 配置 `SmartStrmConfig` | 新增文件; 上游改 `DeleteHandler` 时人工合并 |
+| 删光文件后连带删除元数据 | `src/amane/handlers/delete.py::_delete_orphan_metadata`, 配置 `CleanupConfig` (默认关) | 上游改 `DeleteHandler` / `DeleteResult` 时人工合并 |
 | 自己的镜像构建 | `.github/workflows/build-mine.yml` | 独立文件, 不与上游冲突 |
 | 生成产物重跑 | `.github/workflows/regen-openapi.yml` | 本地跑不了 `pnpm` 时的兜底: Actions 里手动 Run workflow |
 

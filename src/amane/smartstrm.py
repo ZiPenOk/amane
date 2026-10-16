@@ -1,18 +1,23 @@
 """SmartStrm 远端删除通知.
 
 Amane 删除库内媒体文件后本地 STRM 消失, 网盘源文件仍在. SmartStrm 的 Emby 删除同步接口按 Emby
-通知的格式读取 ``Item.Path``: 去掉 ``.strm`` 后缀取父目录, 映射到网盘存储路径后整个影片目录一起删
+通知的格式取 ``Item.Path``: 去掉 ``.strm`` 后缀取父目录, 映射到网盘存储路径后整个影片目录一起删
 (契约见 https://smartstrm.github.io/settings/webhook ). Amane 按同一契约直接投递, 不必在 Emby 侧绕一圈:
 
-    {"Event": "library.deleted", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm"}}
+    {"Event": "library.deleted", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm", "Title": "ABC-123"}}
+
+字段是实测出来的, 不是推的: 现版本只发 ``Path`` 会被判「处理 Webhook 失败: 'Title'」, 因此 ``Title``
+必须带 (内容只进它的删除日志, 删除范围由 ``Path`` 决定, 这里填文件名主干). 回执也不能只看状态码:
+被拒绝时它同样回 HTTP 200, 拒绝原因在响应体的 ``{"success": false, "message": ...}`` 里.
 
 路径按段替换: ``smartstrm.local_root`` (Amane 侧的挂载根) 整个换成 ``smartstrm.emby_root``
 (SmartStrm 挂载到 Emby 的根). 同一父目录只投递一次 — 多集结号共用一个影片目录, 重复投递没有意义.
-映射范围外的路径丢弃; 失败只记日志, 不改任务终态.
+映射范围外的路径丢弃; 失败与拒绝都只记日志, 不改任务终态.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Protocol
@@ -27,6 +32,31 @@ logger = structlog.get_logger()
 
 _DELETE_EVENT = "library.deleted"
 """SmartStrm 的 Emby 删除同步接受的事件名之一."""
+
+
+def rejection_message(body: str) -> str | None:
+    """响应体里 SmartStrm 给出的拒绝原因; 已接受返回 None.
+
+    被拒绝时它一样回 HTTP 200, 只看状态码会把失败记成成功. 两种形态:
+
+    - ``{"success": false, "message": "..."}`` — 实测的拒绝回执 (载荷缺字段 / 路径被拒);
+    - 纯文本 ``ignored: ...`` — 祖先实现的「删除同步未启用」回执, 一并当拒绝, 便于自查配置.
+
+    成功回执 (``ok`` / ``{"success": true}``) 与无法解析的响应体都按已接受处理.
+    """
+    text = body.strip()
+    if not text:
+        return None
+    if text.lower().startswith("ignored"):
+        return text
+    try:
+        payload = json.loads(text)
+    except ValueError:
+        return None
+    if isinstance(payload, dict) and payload.get("success") is False:
+        message = payload.get("message")
+        return str(message) if message is not None else "success=false"
+    return None
 
 
 class DeleteNotifier(Protocol):
@@ -77,16 +107,24 @@ class SmartStrmNotifier:
 
     async def _post(self, emby_path: str) -> None:
         url = self._config.webhook_url.strip()
+        payload = {
+            "Event": _DELETE_EVENT,
+            "Item": {"Path": emby_path, "Title": PurePosixPath(emby_path).stem},
+        }
         try:
-            await self._web_client.request(
+            response = await self._web_client.request(
                 "POST",
                 url,
-                json={"Event": _DELETE_EVENT, "Item": {"Path": emby_path}},
+                json=payload,
                 use_proxy=False,
                 timeout=self._config.timeout,
                 max_attempts=1,
             )
         except Exception as e:
             logger.warning("smartstrm delete notify failed", path=emby_path, error=str(e))
+            return
+        rejection = rejection_message(response.text)
+        if rejection is not None:
+            logger.warning("smartstrm delete rejected", path=emby_path, message=rejection)
             return
         logger.info("smartstrm delete notified", path=emby_path)

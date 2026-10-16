@@ -8,23 +8,32 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 
 from amane.config import SmartStrmConfig
-from amane.smartstrm import SmartStrmNotifier
+from amane.smartstrm import SmartStrmNotifier, rejection_message
 
 if TYPE_CHECKING:
     from amane.net.http import WebClient
 
 
-class FakeWebClient:
-    """记录出站请求; 可注入异常."""
+class FakeResponse:
+    """curl_cffi Response 的最小投影: 只用到 text."""
 
-    def __init__(self, error: Exception | None = None) -> None:
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+class FakeWebClient:
+    """记录出站请求; 可注入异常或响应体."""
+
+    def __init__(self, error: Exception | None = None, body: str = "ok") -> None:
         self.calls: list[dict[str, Any]] = []
         self._error = error
+        self._body = body
 
-    async def request(self, method: str, url: str, **kwargs: Any) -> None:
+    async def request(self, method: str, url: str, **kwargs: Any) -> FakeResponse:
         self.calls.append({"method": method, "url": url, **kwargs})
         if self._error is not None:
             raise self._error
+        return FakeResponse(self._body)
 
 
 def make_notifier(client: FakeWebClient, settings: SmartStrmConfig) -> SmartStrmNotifier:
@@ -78,7 +87,11 @@ async def test_payload_matches_emby_delete_contract() -> None:
     call = client.calls[0]
     assert call["method"] == "POST"
     assert call["url"] == "http://192.168.1.2:8024/webhook/token"
-    assert call["json"] == {"Event": "library.deleted", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm"}}
+    # Title 是实测的必要字段: 缺了会被判「处理 Webhook 失败: 'Title'」.
+    assert call["json"] == {
+        "Event": "library.deleted",
+        "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm", "Title": "ABC-123"},
+    }
     assert call["use_proxy"] is False
     assert call["max_attempts"] == 1
 
@@ -157,3 +170,36 @@ async def test_no_paths_sends_nothing() -> None:
     await notifier.notify_deleted([])
 
     assert client.calls == []
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        # 已接受: 成功回执与读不懂的响应体都不该记成失败
+        ("ok", None),
+        ("", None),
+        ("   ", None),
+        ('{"success": true}', None),
+        ('{"success": true, "message": "done"}', None),
+        ("<html>502</html>", None),
+        ("[1, 2]", None),
+        # 拒绝: 状态码同样是 200, 只有响应体能区分
+        ('{"success": false, "message": "处理 Webhook 失败: \'Title\'"}', "处理 Webhook 失败: 'Title'"),
+        ('{"success": false}', "success=false"),
+        ("ignored: emby 删除同步未启用", "ignored: emby 删除同步未启用"),
+        ("IGNORED: 未启用", "IGNORED: 未启用"),
+    ],
+)
+def test_rejection_message(body: str, expected: str | None) -> None:
+    assert rejection_message(body) == expected
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_rejected_notification_is_not_an_exception() -> None:
+    """被拒绝不能改任务终态: DELETE 的磁盘动作已经完成, 这里只负责留下日志."""
+    client = FakeWebClient(body='{"success": false, "message": "处理 Webhook 失败: \'Title\'"}')
+    notifier = make_notifier(client, config())
+
+    await notifier.notify_deleted([Path("/media/ym/ABC-123/ABC-123.strm")])
+
+    assert len(client.calls) == 1

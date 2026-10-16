@@ -270,3 +270,78 @@ def test_media_file_reprojected_from_path(parent: str, rows: list[tuple[str, _Ph
     assert _type_and_mosaic(engine) == {path: after for path, _, after in rows}
 
     engine.dispose()
+
+
+def test_uncensored_official_number_reprojected_with_extra_marker(tmp_path: Path) -> None:
+    """站点名之外还挂着别的标记的行: 番号 / 类型 / 马赛克一起重算, 谓词之外的行保持原值."""
+    db_path = tmp_path / "migrate.db"
+    cfg = alembic_config(db_path)
+
+    command.upgrade(cfg, "c4e17b2a90d5")
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    rows = [
+        # 方括号站点标签 / 尾随标记: 上一轮迁移认不出, 仍是欧美 + 带站点名的原文
+        (
+            "/media/[10MU] 091926_01-10MU.mp4",
+            ("091926_01-10MU", "WESTERN", None),
+            ("091926_01", "UNCENSORED", "UNCENSORED"),
+        ),
+        (
+            "/media/091926_01-10MU【無修正】.mp4",
+            ("091926_01-10MU", "WESTERN", None),
+            ("091926_01", "UNCENSORED", "UNCENSORED"),
+        ),
+        # 上一轮已经归一过的行: 原样保持
+        (
+            "/media/101526_01-10MU.mp4",
+            ("101526_01", "UNCENSORED", "UNCENSORED"),
+            ("101526_01", "UNCENSORED", "UNCENSORED"),
+        ),
+        # 谓词之外的行
+        ("/media/MIDV-123.mp4", ("MIDV-123", "CENSORED", None), ("MIDV-123", "CENSORED", None)),
+    ]
+    _seed_numbered_rows(db_path, rows)
+
+    command.upgrade(cfg, "head")
+
+    with engine.connect() as conn:
+        after = {
+            row.path: (row.number, row.content_type, row.mosaic)
+            for row in conn.execute(text("SELECT path, number, content_type, mosaic FROM media_files")).all()
+        }
+    assert after == {path: expected for path, _, expected in rows}
+
+    engine.dispose()
+
+
+#: 带番号的相位: 番号, 内容类型与马赛克标记.
+_NumberedPhase = tuple[str, str, str | None]
+
+
+def _seed_numbered_rows(db_path: Path, rows: list[tuple[str, _NumberedPhase, _NumberedPhase]]) -> None:
+    """建库并写入 rows 的升级前行 (含 number), 相位只给内容类型与马赛克."""
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO libraries "
+                "(name, path, automation, recursive, patterns, move_mode, link_mode, video_template, "
+                "write_nfo, copy_resources, trailer_pattern, blacklist_patterns, subtitle_extensions, "
+                "min_file_size) "
+                "VALUES ('t', '/m', 'SCRAPE', 1, '[]', 'MOVE', 'STRM', '{number}.{ext}', 1, "
+                "'[]', '', '[]', '[]', 0)"
+            )
+        )
+        lib_id = conn.execute(text("SELECT id FROM libraries")).scalar_one()
+        for path, (number, content_type, mosaic), _ in rows:
+            conn.execute(
+                text(
+                    "INSERT INTO media_files "
+                    "(path, status, library_id, created_at, updated_at, number, content_type, mosaic) "
+                    "VALUES (:path, 'PENDING', :lib, '2026-01-01 00:00:00', '2026-01-01 00:00:00', "
+                    ":number, :content_type, :mosaic)"
+                ),
+                {"path": path, "lib": lib_id, "number": number, "content_type": content_type, "mosaic": mosaic},
+            )
+    engine.dispose()

@@ -444,6 +444,21 @@ _UNCENSORED_OFFICIAL_NUMBER = re.compile(
     rf"(?:[-_ ]*{_UNCENSORED_OFFICIAL_MARKER})?$",
     re.IGNORECASE,
 )
+_UNCENSORED_OFFICIAL_MARKER_RE = re.compile(_UNCENSORED_OFFICIAL_MARKER, re.IGNORECASE)
+
+
+def _uncensored_official_number(dated: str) -> str | None:
+    """``dated`` 阶段 → 归一后的无码官网番号; 认不出返回 None.
+
+    站点名之外还挂着别的标记时 (``[10MU] 091926_01-10MU`` / ``091926_01-10MU(uncensored)``)
+    整串就不是干净的番号, 但只要站点名与日期号都在, 仍然按日期号归一 —— 否则会落到文件名回退被当成欧美.
+    只能看 ``dated``: ``catalog`` 已把开头的 6 位日期剥掉 (``091926_01-10MU`` → ``09MU``).
+    """
+    if m := _UNCENSORED_OFFICIAL_NUMBER.fullmatch(dated):
+        return f"{m['head']}{m['sep']}{m['tail']}"
+    if _UNCENSORED_OFFICIAL_MARKER_RE.search(dated) and (found := _SIX_DIGIT_CATALOG.search(dated)):
+        return found.group()
+    return None
 
 
 def _match(basename: str, escape_strings: list[str], *, generic: bool) -> tuple[str, ContentType] | None:
@@ -452,9 +467,8 @@ def _match(basename: str, escape_strings: list[str], *, generic: bool) -> tuple[
     c, escaped, dated = t.catalog, t.escaped, t.dated
 
     # 站点名是前后缀时先归一: 否则 ``101526_01-10MU`` 会落到文件名回退被当成欧美.
-    # 必须用 dated —— catalog 已把开头的 6 位日期剥掉, 那样只剩 ``10MU``.
-    if m := _UNCENSORED_OFFICIAL_NUMBER.fullmatch(dated):
-        return f"{m['head']}{m['sep']}{m['tail']}", ContentType.UNCENSORED
+    if official := _uncensored_official_number(dated):
+        return official, ContentType.UNCENSORED
     if "MYWIFE" in c and re.search(r"NO\.\d*", c):
         return f"Mywife No.{re.findall(r'NO\.(\d*)', c)[0]}", ContentType.CENSORED
     if m := re.search(r"CW3D2D?BD-?\d{2,}", c):

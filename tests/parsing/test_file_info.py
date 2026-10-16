@@ -124,6 +124,12 @@ CASES: list[object] = [
     _Case("1pondo-093024_001.mp4", mosaic="uncensored", number="093024_001", content_type=ContentType.UNCENSORED),
     _Case("101526_01-paco.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
     _Case("121315-001-carib.mp4", mosaic="uncensored", number="121315-001", content_type=ContentType.UNCENSORED),
+    # 站点名之外还挂着别的标记 (方括号标签 / 尾随词 / 站点前缀): 一样归一成日期号
+    _Case("[10MU] 091926_01-10MU.mp4", mosaic="uncensored", number="091926_01", content_type=ContentType.UNCENSORED),
+    _Case("091926_01-10MU【無修正】.mp4", mosaic="uncensored", number="091926_01", content_type=ContentType.UNCENSORED),
+    _Case(
+        "hhd800.com@10MU-101526_01.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED
+    ),
     # 分集 + 分辨率
     _Case("MIDV-123-4K-CD1.mp4", cd=1, definition="4K", number="MIDV-123"),
     # --- 分辨率误报: 番号/编码里的字母数字不当作独立标记 ---

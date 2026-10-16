@@ -184,7 +184,7 @@ async def test_organize_subtitle_target_occupied_is_reported(
 
     dest_dir = lib_root / "Studio" / "NSFS-039"
     dest_dir.mkdir(parents=True)
-    occupied_sub = dest_dir / "NSFS-039.srt"
+    occupied_sub = dest_dir / "NSFS-039.chs.srt"
     occupied_sub.write_text("existing subtitle", encoding="utf-8")
 
     lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False)
@@ -514,7 +514,7 @@ async def test_organize_writes_subtitle_tag_for_external_subtitle(
 
     dest = paths_dir / "MIDV-123-C.mp4"
     assert dest.exists()
-    assert (paths_dir / "MIDV-123.srt").exists()
+    assert (paths_dir / "MIDV-123-C.chs.srt").exists()
     updated = await repo.get_media_file(source.id)
     assert updated is not None and updated.path == str(dest)
     assert [call.args[1].has_subtitle for call in watermark.call_args_list] == [True, True]
@@ -835,14 +835,14 @@ async def test_organize_and_delete_do_not_overlap(
 async def test_organize_moves_same_dir_subtitles(
     repo: Repository, resource_store: ResourceStore, tmp_path: Path
 ) -> None:
-    """同目录多个字幕全部搬走, 保持原文件名."""
+    """同目录多个字幕全部搬走, 按视频名与 srt_lang 命名."""
     lib_root = tmp_path / "lib"
     src_dir = lib_root / "incoming"
     src_dir.mkdir(parents=True)
     src = src_dir / "NSFS-039.mp4"
     src.write_bytes(b"video")
     (src_dir / "chs.srt").write_text("sub1")
-    (src_dir / "NSFS-039.zh.ass").write_text("sub2")
+    (src_dir / "NSFS-039.cht.ass").write_text("sub2")
     (src_dir / "readme.txt").write_text("skip")
 
     lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False)
@@ -862,8 +862,8 @@ async def test_organize_moves_same_dir_subtitles(
 
     dest_dir = lib_root / "Studio" / "NSFS-039"
     assert (dest_dir / "NSFS-039.mp4").exists()
-    assert (dest_dir / "chs.srt").read_text() == "sub1"
-    assert (dest_dir / "NSFS-039.zh.ass").read_text() == "sub2"
+    assert (dest_dir / "NSFS-039.chs.srt").read_text() == "sub1"
+    assert (dest_dir / "NSFS-039.cht.ass").read_text() == "sub2"
     assert (src_dir / "readme.txt").exists()
     assert not (src_dir / "chs.srt").exists()
 
@@ -878,9 +878,9 @@ async def test_organize_subtitles_follow_cd(repo: Repository, resource_store: Re
     src2 = src_dir / "NSFS-039-CD2.mp4"
     src1.write_bytes(b"cd1")
     src2.write_bytes(b"cd2")
-    (src_dir / "a-CD1.srt").write_text("cd1sub")
-    (src_dir / "b-CD2.ass").write_text("cd2sub")
-    (src_dir / "chs.srt").write_text("unparsed")
+    (src_dir / "a-CD1.chs.srt").write_text("cd1sub")
+    (src_dir / "b-CD2.cht.ass").write_text("cd2sub")
+    (src_dir / "c.cht.srt").write_text("unparsed")
 
     lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False)
     assert lib.id is not None
@@ -899,9 +899,9 @@ async def test_organize_subtitles_follow_cd(repo: Repository, resource_store: Re
     assert result.result.failed == 0
 
     dest_dir = lib_root / "Studio" / "NSFS-039"
-    assert (dest_dir / "a-CD1.srt").read_text() == "cd1sub"
-    assert (dest_dir / "chs.srt").read_text() == "unparsed"
-    assert (dest_dir / "b-CD2.ass").read_text() == "cd2sub"
+    assert (dest_dir / "NSFS-039-CD1.chs.srt").read_text() == "cd1sub"
+    assert (dest_dir / "NSFS-039-CD1.cht.srt").read_text() == "unparsed"
+    assert (dest_dir / "NSFS-039-CD2.cht.ass").read_text() == "cd2sub"
 
 
 @pytest.mark.asyncio(loop_scope="function")
@@ -969,10 +969,10 @@ async def test_organize_pairs_flat_subtitles_by_number(
 
     dest_a = lib_root / "Studio" / "ABC-123"
     dest_b = lib_root / "Studio" / "DEF-456"
-    assert (dest_a / "ABC-123.srt").read_text() == "first"
-    assert (dest_b / "DEF-456.srt").read_text() == "second"
-    assert not (dest_a / "DEF-456.srt").exists()
-    assert not (dest_b / "ABC-123.srt").exists()
+    assert (dest_a / "ABC-123.chs.srt").read_text() == "first"
+    assert (dest_b / "DEF-456.chs.srt").read_text() == "second"
+    assert not (dest_a / "DEF-456.chs.srt").exists()
+    assert not (dest_b / "ABC-123.chs.srt").exists()
 
 
 @pytest.mark.asyncio(loop_scope="function")
@@ -992,9 +992,9 @@ async def test_organize_pairs_number_and_cd_with_multi_lang(
     for name, body in videos.items():
         (src_dir / name).write_bytes(body.encode())
     (src_dir / "ABC-123-CD1.chs.srt").write_text("a1-chs")
-    (src_dir / "ABC-123-CD1.en.srt").write_text("a1-en")
+    (src_dir / "ABC-123-CD1.cht.srt").write_text("a1-cht")
     (src_dir / "ABC-123-CD2.chs.srt").write_text("a2-chs")
-    (src_dir / "ABC-123-CD2.en.srt").write_text("a2-en")
+    (src_dir / "ABC-123-CD2.cht.srt").write_text("a2-cht")
     (src_dir / "DEF-456-CD1.srt").write_text("d1-sub")
     (src_dir / "DEF-456-CD2.ass").write_text("d2-sub")
 
@@ -1023,12 +1023,12 @@ async def test_organize_pairs_number_and_cd_with_multi_lang(
     dest_a = lib_root / "Studio" / "ABC-123"
     dest_b = lib_root / "Studio" / "DEF-456"
     assert (dest_a / "ABC-123-CD1.chs.srt").read_text() == "a1-chs"
-    assert (dest_a / "ABC-123-CD1.en.srt").read_text() == "a1-en"
+    assert (dest_a / "ABC-123-CD1.cht.srt").read_text() == "a1-cht"
     assert (dest_a / "ABC-123-CD2.chs.srt").read_text() == "a2-chs"
-    assert (dest_a / "ABC-123-CD2.en.srt").read_text() == "a2-en"
-    assert (dest_b / "DEF-456-CD1.srt").read_text() == "d1-sub"
-    assert (dest_b / "DEF-456-CD2.ass").read_text() == "d2-sub"
-    assert not (dest_a / "DEF-456-CD1.srt").exists()
+    assert (dest_a / "ABC-123-CD2.cht.srt").read_text() == "a2-cht"
+    assert (dest_b / "DEF-456-CD1.chs.srt").read_text() == "d1-sub"
+    assert (dest_b / "DEF-456-CD2.chs.ass").read_text() == "d2-sub"
+    assert not (dest_a / "DEF-456-CD1.chs.srt").exists()
     assert not (dest_b / "ABC-123-CD1.chs.srt").exists()
 
 

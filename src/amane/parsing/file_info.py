@@ -286,6 +286,23 @@ def parse_file_info(
     )
 
 
+def detect_subtitle_language(stem: str) -> str:
+    """字幕文件名主干 → ``chs`` / ``cht``.
+
+    ``cht`` 标记包括 cht / tc / zh-tw / zh_tw / zh-hant / traditional 与繁体词;
+    ``chs`` 标记包括 chs / sc / zh-cn / zh_cn / zh-hans / simplified / chinese 与简体 / 中文词.
+    同时命中时取更早出现的标记; 无标记默认 ``chs``.
+    """
+    text = stem.casefold()
+    cht = _SUBTITLE_LANG_CHT.search(text)
+    chs = _SUBTITLE_LANG_CHS.search(text)
+    if cht is None:
+        return "chs"
+    if chs is None:
+        return "cht"
+    return "cht" if cht.start() <= chs.start() else "chs"
+
+
 def subtitle_matches_video(
     video: FileInfo,
     subtitle: FileInfo,
@@ -685,6 +702,16 @@ def _detect_subtitle(basename: str) -> bool:
     if re.search(r"-U?C(?![A-Z0-9])", basename):
         return True
     return bool(re.search(r"[字幕中文]", basename))
+
+
+_SUBTITLE_LANG_CHT = re.compile(
+    r"(?<![a-z0-9])(?:cht|tc|traditional|zh[-_. ]?tw|zh[-_. ]?hant|zhtw|tw)(?![a-z0-9])"
+    r"|繁体中文|繁體中文|繁体|繁體|繁中|正体|正體"
+)
+_SUBTITLE_LANG_CHS = re.compile(
+    r"(?<![a-z0-9])(?:chs|sc|chinese|simplified|zh[-_. ]?cn|zh[-_. ]?hans|zhcn|cn)(?![a-z0-9])"
+    r"|简体中文|简体|简中|简体字|中文字幕|中文|中字"
+)
 
 
 def _fill_mosaic(mosaic: Mosaic | None, content_type: ContentType) -> Mosaic | None:

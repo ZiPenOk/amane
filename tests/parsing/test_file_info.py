@@ -8,6 +8,7 @@ from amane.parsing import (
     ContentType,
     Mosaic,
     detect_cd,
+    detect_subtitle_language,
     extract_number,
     infer_content_type,
     is_amateur,
@@ -525,6 +526,39 @@ DETECT_CD_CASES: list[tuple[str, int | None]] = [
 @pytest.mark.parametrize(("filename", "expected"), DETECT_CD_CASES)
 def test_detect_cd(filename: str, expected: int | None) -> None:
     assert detect_cd(filename) == expected
+
+
+SUBTITLE_LANGUAGE_CASES: list[tuple[str, str]] = [
+    ("ABC-123.chs", "chs"),
+    ("ABC-123.CHS", "chs"),
+    ("ABC-123.sc", "chs"),
+    ("ABC-123.zh-cn", "chs"),
+    ("ABC-123.zh_cn", "chs"),
+    ("ABC-123.zhcn", "chs"),
+    ("ABC-123.简体中文", "chs"),
+    ("ABC-123.简中", "chs"),
+    ("ABC-123.中文字幕", "chs"),
+    ("ABC-123.中文", "chs"),
+    ("ABC-123", "chs"),
+    ("ABC-123.foo", "chs"),
+    ("ABC-123.cht", "cht"),
+    ("ABC-123.CHT", "cht"),
+    ("ABC-123.tc", "cht"),
+    ("ABC-123.zh-tw", "cht"),
+    ("ABC-123.zh_tw", "cht"),
+    ("ABC-123.zh-hant", "cht"),
+    ("ABC-123.繁体中文", "cht"),
+    ("ABC-123.繁體中文", "cht"),
+    ("ABC-123.繁中", "cht"),
+    ("ABC-123.繁體", "cht"),
+    ("ABC-123.chs&cht", "chs"),
+    ("ABC-123.cht&chs", "cht"),
+]
+
+
+@pytest.mark.parametrize(("stem", "expected"), SUBTITLE_LANGUAGE_CASES)
+def test_detect_subtitle_language(stem: str, expected: str) -> None:
+    assert detect_subtitle_language(stem) == expected
 
 
 ESCAPE_STRING_CASES: list[tuple[str, list[str], str]] = [

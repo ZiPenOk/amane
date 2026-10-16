@@ -95,6 +95,7 @@ Authorization = "Bearer <Amane API Token>"
 | `{link_dir}` | 链接文件所在目录 | — |
 | `{link_name}` | 整理后链接文件名, 不含扩展名 | — |
 | `{raw_srt_name}` | 字幕原文件名, 不含扩展名 | `foo.zh.srt` → `foo.zh` |
+| `{srt_lang}` | 字幕语言标记, 统一映射为 `chs` / `cht` | `简体中文` → `chs`, `繁体中文` → `cht`, 无标记 → `chs` |
 
 马赛克类型依据关键词与番号解析判定. 文件名 `CRACKED` / `-U` / `-UC` 为破解 (`-UC` 同时为中字); `无码` / `UNCENSORED` 为无码; `流出` / `LEAKED` 为流出. 目录名为整段 `uncensored` / `cracked` / `leaked` / `无码` / `破解` / `流出` 时同样判定. 番号解析为有码且无上述标记时为 `censored`; 解析为无码且无上述标记时为 `uncensored`. 国产 / FC2 / 欧美等无法判定时为空.
 
@@ -112,7 +113,7 @@ Authorization = "Bearer <Amane API Token>"
 | -------- | -------- |
 | `{video_dir}` `{video_name}` `{video_relpath}` | 链接、附属、字幕、STRM 内容 |
 | `{link_dir}` `{link_name}` | 附属、字幕、STRM 内容 |
-| `{raw_srt_name}` | 仅字幕 |
+| `{raw_srt_name}` `{srt_lang}` | 仅字幕 |
 
 ### 默认模板
 
@@ -122,7 +123,7 @@ Authorization = "Bearer <Amane API Token>"
 海报: {link_dir}/poster.jpg
 NFO: {link_dir}/{video_name}.nfo
 预告片: {link_dir}/trailer.mp4
-字幕: {link_dir}/{raw_srt_name}.{ext}
+字幕: {link_dir}/{video_name}.{srt_lang}.{ext}
 ```
 
 ### 可选组语法
@@ -232,7 +233,9 @@ Amane 支持自动识别分集文件名, 目前支持以下几种常见标记:
 整理时会把视频**同目录**下的字幕文件一起搬走 (不递归子目录, 字幕本身不入库):
 
 - 扩展名可在库设置中配置, 默认 `.srt` `.ass` `.ssa` `.vtt` `.sub`. 留空则不处理字幕.
-- 多个字幕全部带走, 保持原文件名和扩展名, 默认放到整理后视频的同一目录.
+- 多个字幕全部带走, 默认按 `{video_name}.{srt_lang}.{ext}` 放置到整理后视频的同一目录.
+- 字幕语言标记统一映射为 `chs` / `cht`: `chs` / `sc` / `zh-cn` / `zh_cn` / `简体中文` / `中文` 等归为 `chs`; `cht` / `tc` / `zh-tw` / `zh_tw` / `繁体中文` / `繁體中文` 等归为 `cht`; 无标记默认 `chs`.
+- 需要保留字幕原文件名时, 把库的 `subtitle_template` 改成 `{link_dir}/{raw_srt_name}.{ext}`.
 - 字幕文件名能解析出番号时, 必须与当前视频番号相同, 并按分集标记配对.
 - 解析不出番号时, 按同目录分集规则配对: 有标记的跟当前视频同号; 解析不出分集的跟无分集或 CD1 的视频.
 - 同目录命中字幕时, `{sub?}` 占位符输出 `C`, 整理出的封面与海报也打上中字角标, 与片库的中字标记一致. 文件名自带中字标记时同样如此.

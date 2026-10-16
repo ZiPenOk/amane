@@ -329,12 +329,18 @@ class TestResolvePathsDefaults:
 
         assert result.trailer == media / "StudioX" / "ABC-123" / "trailer.mp4"
 
-    def test_subtitle_default_keeps_raw_name(self, media: Path):
+    def test_subtitle_default_uses_video_name_and_srt_lang(self, media: Path):
         wp = Library(name="t", path=str(media), video_template="{studio}/{number}/{number}.{ext}")
         meta = _meta()
         video = resolve_paths(wp, meta, ext="mp4")
-        sub = resolve_subtitle_path(wp, meta, Path("/inbox/MIDV-123.zh.srt"), video_dir=video.video.parent)
-        assert sub == media / "StudioX" / "ABC-123" / "MIDV-123.zh.srt"
+        sub = resolve_subtitle_path(
+            wp,
+            meta,
+            Path("/inbox/ABC-123.简体中文.srt"),
+            video_dir=video.video.parent,
+            video_name=video.video.stem,
+        )
+        assert sub == media / "StudioX" / "ABC-123" / "ABC-123.chs.srt"
 
 
 class TestResolvePathsCustomTemplates:
@@ -727,12 +733,13 @@ class TestResolvePathsLink:
         sub = resolve_subtitle_path(
             wp,
             _meta(),
-            Path("/inbox/MIDV-123.zh.srt"),
+            Path("/inbox/ABC-123.繁體中文.srt"),
             video_dir=video.video.parent,
+            video_name=video.video.stem,
             link_dir=video.link.parent,
             safe_dirs=[other],
         )
-        assert sub == other / "StudioX" / "ABC-123" / "MIDV-123.zh.srt"
+        assert sub == other / "StudioX" / "ABC-123" / "ABC-123.cht.srt"
 
 
 class TestRenderedNamePlaceholders:

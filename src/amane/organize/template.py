@@ -15,6 +15,7 @@ from ..parsing.file_info import (
     DEFINITION_VALUES,
     MOSAIC_VALUES,
     FileInfo,
+    detect_subtitle_language,
     parse_file_info,
     split_number,
 )
@@ -62,6 +63,7 @@ TemplateVariables = TypedDict(
         "link_dir": str,
         "link_name": str,
         "raw_srt_name": str,
+        "srt_lang": str,
     },
 )
 PLACEHOLDERS: tuple[str, ...] = tuple(TemplateVariables.__annotations__)
@@ -354,6 +356,7 @@ def _build_variables(
         "link_dir": _UNKNOWN,
         "link_name": _UNKNOWN,
         "raw_srt_name": _UNKNOWN,
+        "srt_lang": _UNKNOWN,
     }
 
 
@@ -404,6 +407,7 @@ class TemplateContext:
     def apply_subtitle(self, subtitle_source: Path) -> None:
         self.variables["ext"] = subtitle_source.suffix.lstrip(".")
         self.variables["raw_srt_name"] = subtitle_source.stem
+        self.variables["srt_lang"] = detect_subtitle_language(subtitle_source.stem)
 
 
 def _template_keeps_absolute(template: str, variables: dict[str, str]) -> bool:

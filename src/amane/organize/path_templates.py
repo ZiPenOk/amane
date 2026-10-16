@@ -38,7 +38,8 @@ EXTRAFANART_TEMPLATE_DEFAULT = "{link_dir}/extrafanart"
 # 媒体服务器按视频文件名匹配 NFO, 所以默认跟随 {video_name} (含 CD / 中字段).
 NFO_TEMPLATE_DEFAULT = "{link_dir}/{video_name}.nfo"
 TRAILER_TEMPLATE_DEFAULT = "{link_dir}/trailer.mp4"
-SUBTITLE_TEMPLATE_DEFAULT = "{link_dir}/{raw_srt_name}.{ext}"
+# 字幕跟随视频名, 语言标记统一收成 chs / cht; 原标题里的 zh-cn / 简体中文等不再保留.
+SUBTITLE_TEMPLATE_DEFAULT = "{link_dir}/{video_name}.{srt_lang}.{ext}"
 
 
 def normalize_link_template(value: str | None) -> str | None:
@@ -147,11 +148,12 @@ def resolve_subtitle_path(
     safe_dirs: Sequence[Path] | None = (),
     actor_genders: Mapping[str, ActorGender] | None = None,
 ) -> Path:
-    """`{ext}` / `{raw_srt_name}` 取自该字幕源文件; `{raw_name}` / `{raw_dir}` 仍是视频源.
+    """`{ext}` / `{raw_srt_name}` / `{srt_lang}` 取自该字幕源文件; `{raw_name}` / `{raw_dir}` 仍是视频源.
+    `{srt_lang}` 把字幕语言标记统收成 `chs` / `cht`, 无标记默认 `chs`.
     `{video_dir}` / `{video_name}` 为整理后视频父目录与文件名 (不含扩展名);
     `{video_relpath}` 为整理后视频相对库根目录的路径 (`video_dest` 未传时为空);
     `{link_dir}` / `{link_name}` 为链接父目录与文件名 (未设置链接时分别与视频侧相同).
-    默认模板保持原文件名与扩展名.
+    默认模板跟随视频名, 并把语言标记收成 `chs` / `cht`.
     """
     base_path = Path(library.path)
     ctx = TemplateContext.from_metadata(

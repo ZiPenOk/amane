@@ -769,17 +769,18 @@ class RecordingNotifier:
 
 
 def _remote_library(tmp_path: Path) -> Path:
-    """库目录: 一个 .strm 正片与一张同名附属图, 两者都命中黑名单."""
+    """库目录: 一个 .strm 正片与一份同名真视频、一张附属图, 三者都命中黑名单."""
     lib_root = tmp_path / "lib"
     (lib_root / "work").mkdir(parents=True)
     (lib_root / "work" / "ABC-123.strm").write_bytes(b"x" * 10)
+    (lib_root / "work" / "ABC-123.mp4").write_bytes(b"z" * 10)
     (lib_root / "work" / "ABC-123.jpg").write_bytes(b"y" * 10)
     return lib_root
 
 
 @pytest.mark.asyncio(loop_scope="function")
 async def test_delete_notifies_remote_for_media_files(repo: Repository, tmp_path: Path) -> None:
-    """远端源文件只按媒体文件对账: 附属图与目录条目不参与."""
+    """远端源文件只按 STRM 对账: 真视频、附属图与目录条目都不参与."""
     lib_root = _remote_library(tmp_path)
     lib = await repo.create_library(name="t", path=str(lib_root), write_nfo=False, blacklist_patterns=["ABC-123"])
     assert lib.id is not None
@@ -834,7 +835,7 @@ async def test_delete_does_not_notify_targets_that_failed(
 
     assert result.success is True
     assert result.result is not None
-    assert result.result.failed == 2
+    assert result.result.failed == 3
     assert notifier.paths == []
 
 

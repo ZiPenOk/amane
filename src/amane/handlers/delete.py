@@ -41,6 +41,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
+STRM_EXTENSION = ".strm"
+"""远端删除通知的判据: 只有 STRM 能推出它在网盘上的源文件."""
+
 
 class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
     """执行一份清单; 不重新扫描, 不重新生成清单.
@@ -127,10 +130,10 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
         probe = _MediaProbe(orphan_scan=orphan_scan) if orphan_scan is not None else None
         tally = DeleteTally()
         removed_paths: list[Path] = []
-        # 远端源文件按已删除的媒体文件对账. 目录条目按构造不含媒体 (残留目录 / 空目录 / 整目录删除
-        # 都逐条展开), 因此只看文件条目.
+        # 远端源文件按已删除的 STRM 对账. 只收 .strm: 对端按它推出目标媒体文件, 其它扩展名推不出来;
+        # 库内就是真视频时删除本地已经是删云端本身 (挂载视图), 不需要这条通知.
+        # 目录条目按构造不含媒体 (残留目录 / 空目录 / 整目录删除都逐条展开), 因此只看文件条目.
         notifier = self._smartstrm if self._smartstrm is not None and self._smartstrm.enabled else None
-        media_extensions = self._media_extensions()
         removed_media: list[Path] = []
         reverify_rejected = 0
         total = len(targets)
@@ -152,7 +155,7 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 if (
                     notifier is not None
                     and entry.kind is not InventoryEntryKind.DIR
-                    and entry.path.suffix.lower() in media_extensions
+                    and entry.path.suffix.lower() == STRM_EXTENSION
                 ):
                     removed_media.append(entry.path)
             elif outcome.error:
@@ -202,12 +205,6 @@ class DeleteHandler(TaskHandler[DeletePayload, DeleteResult]):
                 reverify_rejected=reverify_rejected,
             ),
         )
-
-    def _media_extensions(self) -> frozenset[str]:
-        """通知远端删除时的媒体判据, 与执行前复验取同一份设置."""
-        if self._config is None:
-            return MEDIA_EXTENSIONS
-        return frozenset(self._config.watcher.media_extensions) or MEDIA_EXTENSIONS
 
     def _orphan_scan(
         self,

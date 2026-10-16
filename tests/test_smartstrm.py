@@ -123,8 +123,8 @@ async def test_maps_local_root_to_emby_root(local_root: str, emby_root: str, pat
 
 
 @pytest.mark.asyncio(loop_scope="function")
-async def test_same_directory_notified_once() -> None:
-    """多集结号共用一个影片目录: 同目录只投递一次, 不同目录各自投递."""
+async def test_each_media_file_delivered_separately() -> None:
+    """对端按 .strm 推出的那个媒体文件删, 不做整目录删除: 同目录的多份文件必须逐个投递."""
     client = FakeWebClient()
     notifier = make_notifier(client, config())
 
@@ -132,13 +132,15 @@ async def test_same_directory_notified_once() -> None:
         [
             Path("/media/ym/ABC-123/ABC-123-A.strm"),
             Path("/media/ym/ABC-123/ABC-123-B.strm"),
-            Path("/media/ym/ABC-123/cover.jpg"),
             Path("/media/ym/DEF-456/DEF-456.strm"),
+            # 同一条路径重复出现只发一次
+            Path("/media/ym/ABC-123/ABC-123-A.strm"),
         ]
     )
 
     assert notified(client) == [
         "/strm/ym/ABC-123/ABC-123-A.strm",
+        "/strm/ym/ABC-123/ABC-123-B.strm",
         "/strm/ym/DEF-456/DEF-456.strm",
     ]
 

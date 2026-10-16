@@ -12,8 +12,9 @@ Amane 删除库内媒体文件后本地 STRM 消失, 网盘源文件仍在. Smar
 回执也不能只看状态码: 被拒绝时它同样回 HTTP 200, 拒绝原因在响应体的 ``{"success": false, "message": ...}`` 里.
 
 路径按段替换: ``smartstrm.local_root`` (Amane 侧的挂载根) 整个换成 ``smartstrm.emby_root``
-(SmartStrm 挂载到 Emby 的根). 同一父目录只投递一次 — 多集结号共用一个影片目录, 重复投递没有意义.
-映射范围外的路径丢弃; 失败与拒绝都只记日志, 不改任务终态.
+(SmartStrm 挂载到 Emby 的根). 它按 ``.strm`` 推出的**那个媒体文件**逐个删除 (回执里的 ``remote_path``
+就是该文件), 不做整目录删除, 因此一个影片目录下的多份文件必须逐条投递 — 只发一条只会少一个文件.
+只有完全相同的路径才去重. 映射范围外的路径丢弃; 失败与拒绝都只记日志, 不改任务终态.
 """
 
 from __future__ import annotations
@@ -81,14 +82,17 @@ class SmartStrmNotifier:
         return self._config.enabled and bool(self._config.webhook_url.strip())
 
     async def notify_deleted(self, paths: Sequence[Path]) -> None:
-        """按父目录去重后逐条投递; 调用方给出的是已删除的媒体文件路径."""
+        """逐条投递; 调用方给出的是已删除的媒体文件路径."""
         if not self.enabled:
             return
         for emby_path in self._emby_paths(paths):
             await self._post(emby_path)
 
     def _emby_paths(self, paths: Iterable[Path]) -> list[str]:
-        """映射成 Emby 侧路径并按父目录去重; 不在 ``local_root`` 内的路径丢弃."""
+        """映射成 Emby 侧路径, 完全相同的路径只留一条; 不在 ``local_root`` 内的路径丢弃.
+
+        不去重父目录: 对端按 ``.strm`` 推出的媒体文件逐个删除, 同目录的多个文件必须逐个投递.
+        """
         local_root = PurePosixPath(self._config.local_root.strip() or "/")
         emby_root = PurePosixPath(self._config.emby_root.strip() or "/")
         seen: set[str] = set()
@@ -98,12 +102,11 @@ class SmartStrmNotifier:
             if not posix.is_relative_to(local_root):
                 logger.debug("smartstrm notify skipped", path=str(path), reason="outside local_root")
                 continue
-            emby_path = emby_root / posix.relative_to(local_root)
-            parent = str(emby_path.parent)
-            if parent in seen:
+            emby_path = str(emby_root / posix.relative_to(local_root))
+            if emby_path in seen:
                 continue
-            seen.add(parent)
-            mapped.append(str(emby_path))
+            seen.add(emby_path)
+            mapped.append(emby_path)
         return mapped
 
     async def _post(self, emby_path: str) -> None:

@@ -131,11 +131,11 @@ handler 之间复用的阶段逻辑, 不是一条可跳步的总管线:
 **远端删除通知** (`src/amane/smartstrm.py`, 配置 `smartstrm`): 库内媒体文件被 `DELETE` 删除后, 网盘源文件仍在. `smartstrm.enabled` 时按 SmartStrm 的 Emby 删除同步契约投递 (契约见 <https://smartstrm.github.io/settings/webhook>):
 
 ```json
-{"Event": "library.deleted", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm", "Title": "ABC-123"}}
+{"Event": "library.deleted", "Title": "已删除了 ABC-123", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm"}}
 ```
 
 - 路径按段替换: `smartstrm.local_root` (Amane 侧的挂载根) 换成 `smartstrm.emby_root` (SmartStrm 挂载到 Emby 的根, 须与它的 `strm_in_emby` 一致), 范围外的路径丢弃;
-- 字段是实测的: 只发 `Event` 与 `Item.Path` 会被判「处理 Webhook 失败: 'Title'」, `Item.Title` 必须带, 取值是文件名主干 (只进它的删除日志, 删除范围由 `Item.Path` 决定);
+- 字段是实测的: 缺 **顶层** `Title` 会被判「处理 Webhook 失败: 'Title'」, 放进 `Item` 无效; 它只进 SmartStrm 的删除日志, 删除范围由 `Item.Path` 决定;
 - **回执不能只看状态码**: 被拒绝时它同样回 HTTP 200, 原因在响应体的 `{"success": false, "message": ...}` 里 (祖先实现的「未启用」回执是纯文本 `ignored: ...`), 两者都记成拒绝警告而不是 `notified`;
 - 同一父目录只投递一次 — SmartStrm 取 `.strm` 的父目录整目录删除, 多集结号共用一个影片目录时重复投递没有意义;
 - 只有**文件条目**参与: 残留目录与空目录按定义不含媒体, 整目录删除在清单里逐条展开, 因此目录条目不必再展开一次.

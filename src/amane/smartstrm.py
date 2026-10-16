@@ -4,11 +4,12 @@ Amane 删除库内媒体文件后本地 STRM 消失, 网盘源文件仍在. Smar
 通知的格式取 ``Item.Path``: 去掉 ``.strm`` 后缀取父目录, 映射到网盘存储路径后整个影片目录一起删
 (契约见 https://smartstrm.github.io/settings/webhook ). Amane 按同一契约直接投递, 不必在 Emby 侧绕一圈:
 
-    {"Event": "library.deleted", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm", "Title": "ABC-123"}}
+    {"Event": "library.deleted", "Title": "已删除了 ABC-123", "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm"}}
 
-字段是实测出来的, 不是推的: 现版本只发 ``Path`` 会被判「处理 Webhook 失败: 'Title'」, 因此 ``Title``
-必须带 (内容只进它的删除日志, 删除范围由 ``Path`` 决定, 这里填文件名主干). 回执也不能只看状态码:
-被拒绝时它同样回 HTTP 200, 拒绝原因在响应体的 ``{"success": false, "message": ...}`` 里.
+字段是实测出来的, 不是推的: 现版本读**顶层** ``Title``, 只发 ``Event`` 与 ``Item.Path`` 会被判
+「处理 Webhook 失败: 'Title'」, 而把 ``Title`` 放进 ``Item`` 无效. 删除范围由 ``Item.Path`` 决定,
+``Title`` 只进它的删除日志 (实测回执里报的是路径解析结果, 不是这个串), 这里填一句可读的说明.
+回执也不能只看状态码: 被拒绝时它同样回 HTTP 200, 拒绝原因在响应体的 ``{"success": false, "message": ...}`` 里.
 
 路径按段替换: ``smartstrm.local_root`` (Amane 侧的挂载根) 整个换成 ``smartstrm.emby_root``
 (SmartStrm 挂载到 Emby 的根). 同一父目录只投递一次 — 多集结号共用一个影片目录, 重复投递没有意义.
@@ -109,7 +110,8 @@ class SmartStrmNotifier:
         url = self._config.webhook_url.strip()
         payload = {
             "Event": _DELETE_EVENT,
-            "Item": {"Path": emby_path, "Title": PurePosixPath(emby_path).stem},
+            "Title": f"已删除了 {PurePosixPath(emby_path).stem}",
+            "Item": {"Path": emby_path},
         }
         try:
             response = await self._web_client.request(

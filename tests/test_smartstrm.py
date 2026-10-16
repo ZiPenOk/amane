@@ -87,10 +87,11 @@ async def test_payload_matches_emby_delete_contract() -> None:
     call = client.calls[0]
     assert call["method"] == "POST"
     assert call["url"] == "http://192.168.1.2:8024/webhook/token"
-    # Title 是实测的必要字段: 缺了会被判「处理 Webhook 失败: 'Title'」.
+    # Title 是实测的必要字段, 且在顶层: 缺了会被判「处理 Webhook 失败: 'Title'」.
     assert call["json"] == {
         "Event": "library.deleted",
-        "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm", "Title": "ABC-123"},
+        "Title": "已删除了 ABC-123",
+        "Item": {"Path": "/strm/ym/ABC-123/ABC-123.strm"},
     }
     assert call["use_proxy"] is False
     assert call["max_attempts"] == 1

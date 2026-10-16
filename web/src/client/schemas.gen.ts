@@ -3392,6 +3392,7 @@ export const HotSettingsSchema = {
             $ref: '#/components/schemas/LLMConfig',
             default: {
                 enabled: false,
+                provider: 'llm',
                 translate_fields: [
                     'title',
                     'plot'
@@ -3400,7 +3401,8 @@ export const HotSettingsSchema = {
                 api_type: 'chat',
                 base_url: 'https://api.openai.com/v1',
                 model: '',
-                rate_limit: 2
+                rate_limit: 2,
+                google_endpoint: 'https://translation.googleapis.com/language/translate/v2'
             }
         },
         r18: {
@@ -3808,9 +3810,22 @@ export const LLMConfigSchema = {
             title: 'Enabled',
             default: false
         },
+        provider: {
+            $ref: '#/components/schemas/TranslationProvider',
+            default: 'llm'
+        },
         translate_fields: {
             items: {
-                $ref: '#/components/schemas/MetadataField'
+                enum: [
+                    'title',
+                    'plot',
+                    'actors',
+                    'directors',
+                    'tags',
+                    'series',
+                    'publisher',
+                    'studio'
+                ]
             },
             type: 'array',
             title: 'Translate Fields'
@@ -3835,7 +3850,16 @@ export const LLMConfigSchema = {
                 'x-long': true
             },
             propertyNames: {
-                $ref: '#/components/schemas/MetadataField'
+                enum: [
+                    'title',
+                    'plot',
+                    'actors',
+                    'directors',
+                    'tags',
+                    'series',
+                    'publisher',
+                    'studio'
+                ]
             },
             type: 'object',
             title: 'Field Prompts'
@@ -3871,11 +3895,27 @@ export const LLMConfigSchema = {
             minimum: 0.1,
             title: 'Rate Limit',
             default: 2
+        },
+        google_api_key: {
+            anyOf: [
+                {
+                    type: 'string'
+                },
+                {
+                    type: 'null'
+                }
+            ],
+            title: 'Google Api Key'
+        },
+        google_endpoint: {
+            type: 'string',
+            title: 'Google Endpoint',
+            default: 'https://translation.googleapis.com/language/translate/v2'
         }
     },
     type: 'object',
     title: 'LLMConfig',
-    description: '凭据放 Hot, 可在 UI 修改并热生效. 与 agent section 隔离.'
+    description: '翻译服务配置. 凭据放 Hot, 可在 UI 修改并热生效. 与 agent section 隔离.'
 } as const;
 
 export const LanguageSchema = {
@@ -9270,6 +9310,15 @@ export const ToolResultRowSchema = {
     ],
     title: 'ToolResultRow',
     description: '工具回执. 名字与参数在同 id 的 `ToolCallRow`, 故本行只带结果 (续批的回合不会再报调用名).'
+} as const;
+
+export const TranslationProviderSchema = {
+    type: 'string',
+    enum: [
+        'llm',
+        'google'
+    ],
+    title: 'TranslationProvider'
 } as const;
 
 export const TrashSummaryResponseSchema = {

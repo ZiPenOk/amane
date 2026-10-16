@@ -10,7 +10,7 @@
     "logging": "日志",
     "sr": "图像超分",
     "compress": "图片压缩",
-    "llm": "LLM 翻译",
+    "llm": "翻译",
     "watermark": "水印"
   },
   "config": {
@@ -624,12 +624,19 @@
     },
     "llm": {
       "enabled": {
-        "label": "启用 LLM 翻译",
-        "description": "刮削时翻译文本字段"
+        "label": "启用翻译",
+        "description": "刮削时翻译所选文本字段"
+      },
+      "provider": {
+        "label": "翻译服务",
+        "options": {
+          "llm": "LLM",
+          "google": "Google"
+        }
       },
       "api_key": {
-        "label": "API 密钥",
-        "description": "上游服务的密钥; 只保存在本机配置"
+        "label": "LLM API 密钥",
+        "description": "LLM 上游的密钥; 只保存在本机配置"
       },
       "api_type": {
         "label": "API 类型",
@@ -649,9 +656,17 @@
       "rate_limit": {
         "label": "每秒请求上限"
       },
+      "google_api_key": {
+        "label": "Google API 密钥",
+        "description": "Google Cloud Translation API 密钥"
+      },
+      "google_endpoint": {
+        "label": "Google 端点",
+        "description": "Cloud Translation Basic v2 端点, 可指向兼容镜像"
+      },
       "translate_fields": {
         "label": "翻译字段",
-        "description": "当前仅支持标题/剧情",
+        "description": "可选全部文本字段; 日期/时长/URL/评分不翻译",
         "$": {
           "options": {
             "title": "标题",

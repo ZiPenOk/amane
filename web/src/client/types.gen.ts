@@ -1910,17 +1910,18 @@ export type JsonValue = unknown;
 /**
  * LLMConfig
  *
- * 凭据放 Hot, 可在 UI 修改并热生效. 与 agent section 隔离.
+ * 翻译服务配置. 凭据放 Hot, 可在 UI 修改并热生效. 与 agent section 隔离.
  */
 export type LlmConfig = {
     /**
      * Enabled
      */
     enabled?: boolean;
+    provider?: TranslationProvider;
     /**
      * Translate Fields
      */
-    translate_fields?: Array<MetadataField>;
+    translate_fields?: Array<'title' | 'plot' | 'actors' | 'directors' | 'tags' | 'series' | 'publisher' | 'studio'>;
     /**
      * System Prompt
      */
@@ -1929,7 +1930,7 @@ export type LlmConfig = {
      * Field Prompts
      */
     field_prompts?: {
-        [key in MetadataField]?: string;
+        [key: string]: string;
     };
     /**
      * Api Key
@@ -1948,6 +1949,14 @@ export type LlmConfig = {
      * Rate Limit
      */
     rate_limit?: number;
+    /**
+     * Google Api Key
+     */
+    google_api_key?: string | null;
+    /**
+     * Google Endpoint
+     */
+    google_endpoint?: string;
 };
 
 /**
@@ -4760,6 +4769,11 @@ export type ToolResultRow = {
     tool_call_id: string;
     result: JsonValue;
 };
+
+/**
+ * TranslationProvider
+ */
+export type TranslationProvider = 'llm' | 'google';
 
 /**
  * TrashSummaryResponse

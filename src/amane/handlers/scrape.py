@@ -303,7 +303,7 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
     async def _translate_metadata(
         self, metadata: AggregatedMetadata, field_language: FieldLanguage, use_cache: bool
     ) -> None:
-        """就地翻译 ``llm.translate_fields`` 中的文本标量. 单字段失败不影响其余, 全程不抛.
+        """就地翻译 ``llm.translate_fields`` 中的文本字段 (标量 / 列表 / 演员名). 单字段失败不影响其余, 全程不抛.
         ``use_cache`` 为 False 时跳过译文缓存读取, 但仍刷新缓存.
         """
         assert self._translator is not None
@@ -316,6 +316,42 @@ class ScrapeHandler(TaskHandler[ScrapePayload, ScrapeResult]):
             translated = await self._translate_field(metadata.plot, field_language, MetadataField.PLOT, use_cache)
             if translated:
                 metadata.plot = translated
+        if MetadataField.SERIES in fields and metadata.series:
+            translated = await self._translate_field(metadata.series, field_language, MetadataField.SERIES, use_cache)
+            if translated:
+                metadata.series = translated
+        if MetadataField.STUDIO in fields and metadata.studio:
+            translated = await self._translate_field(metadata.studio, field_language, MetadataField.STUDIO, use_cache)
+            if translated:
+                metadata.studio = translated
+        if MetadataField.PUBLISHER in fields and metadata.publisher:
+            translated = await self._translate_field(
+                metadata.publisher, field_language, MetadataField.PUBLISHER, use_cache
+            )
+            if translated:
+                metadata.publisher = translated
+        if MetadataField.ACTORS in fields:
+            for actor in metadata.actors:
+                translated = await self._translate_field(actor.name, field_language, MetadataField.ACTORS, use_cache)
+                if translated:
+                    actor.name = translated
+        if MetadataField.DIRECTORS in fields:
+            translated = await self._translate_list(
+                metadata.directors, field_language, MetadataField.DIRECTORS, use_cache
+            )
+            if translated is not None:
+                metadata.directors = translated
+        if MetadataField.TAGS in fields:
+            translated = await self._translate_list(metadata.tags, field_language, MetadataField.TAGS, use_cache)
+            if translated is not None:
+                metadata.tags = translated
+
+    async def _translate_list(
+        self, values: list[str], field_language: FieldLanguage, field: MetadataField, use_cache: bool
+    ) -> list[str] | None:
+        """逐项翻译列表字段; 全部未变时返回 ``None``, 调用方保留原列表."""
+        translated = [await self._translate_field(value, field_language, field, use_cache) or value for value in values]
+        return translated if translated != values else None
 
     async def _translate_field(
         self, value: str, field_language: FieldLanguage, field: MetadataField, use_cache: bool

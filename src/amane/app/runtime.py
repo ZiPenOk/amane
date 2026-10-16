@@ -506,11 +506,14 @@ def build_handlers(
     # 译文缓存是会话级, 热重载时复用同一实例.
     translator = build_translator(
         enabled=hot.llm.enabled,
+        provider=hot.llm.provider,
         api_type=hot.llm.api_type,
         api_key=hot.llm.api_key,
         base_url=hot.llm.base_url,
         model=hot.llm.model,
         rate_limit=hot.llm.rate_limit,
+        google_api_key=hot.llm.google_api_key,
+        google_endpoint=hot.llm.google_endpoint,
         proxy=hot.network.proxy,
         system_prompt=hot.llm.system_prompt,
         field_prompts=hot.llm.field_prompts,

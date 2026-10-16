@@ -64,6 +64,12 @@ class ApiType(StrEnum):
     ANTHROPIC = "anthropic"
 
 
+# 翻译服务: LLM 经 pydantic-ai; Google 走 Cloud Translation Basic v2.
+class TranslationProvider(StrEnum):
+    LLM = "llm"
+    GOOGLE = "google"
+
+
 class ActorGender(StrEnum):
     """演员性别 - 用于展示与按站裁剪刮削源."""
 

@@ -10,7 +10,7 @@
     "logging": "Logging",
     "sr": "Super Resolution",
     "compress": "Image compression",
-    "llm": "LLM Translation",
+    "llm": "Translation",
     "watermark": "Watermark"
   },
   "config": {
@@ -624,12 +624,19 @@
     },
     "llm": {
       "enabled": {
-        "label": "Enable LLM Translation",
-        "description": "Translate text fields during scrape"
+        "label": "Enable Translation",
+        "description": "Translate selected text fields during scrape"
+      },
+      "provider": {
+        "label": "Translation Provider",
+        "options": {
+          "llm": "LLM",
+          "google": "Google"
+        }
       },
       "api_key": {
-        "label": "API Key",
-        "description": "Upstream service key; stored in the local config only"
+        "label": "LLM API Key",
+        "description": "LLM upstream key; stored in the local config only"
       },
       "api_type": {
         "label": "API Type",
@@ -649,9 +656,17 @@
       "rate_limit": {
         "label": "Max requests per second"
       },
+      "google_api_key": {
+        "label": "Google API Key",
+        "description": "Google Cloud Translation API key"
+      },
+      "google_endpoint": {
+        "label": "Google Endpoint",
+        "description": "Cloud Translation Basic v2 endpoint; can point to a compatible mirror"
+      },
       "translate_fields": {
         "label": "Fields to Translate",
-        "description": "Currently only title and plot are supported",
+        "description": "All text fields are selectable; dates, runtime, URLs and scores are not translated",
         "$": {
           "options": {
             "title": "Title",

@@ -1,6 +1,8 @@
-"""跨语系经缓存后经 pydantic-ai ``Model`` 翻译; 简繁经 ``zhconv``, 不经 LLM、不写入缓存.
+"""LLM 翻译器与 ``build_translator`` provider 装配.
 
-已是目标语言返回 ``None``. ``build_translator`` 在 enabled=False 或缺 api_key 时返回 ``None``.
+LLM 路径跨语系经缓存后经 pydantic-ai ``Model`` 翻译; title / plot 的中文简繁经 ``zhconv``, 不经 LLM、不写入缓存.
+词级字段不套用句子级启发式, 避免漏译日文汉字词. 已是目标语言或结果与原文相同返回 ``None``.
+``build_translator`` 在 enabled=False 或缺对应 provider 密钥时返回 ``None``.
 """
 
 import re
@@ -14,10 +16,12 @@ from pydantic_ai.direct import model_request
 from pydantic_ai.messages import ModelMessage, ModelRequest, SystemPromptPart, UserPromptPart
 from pydantic_ai.models import Model
 
-from ..enums import ApiType, Language, MetadataField
-from ..utils.language import needs_llm_translation
+from ..enums import ApiType, Language, MetadataField, TranslationProvider
+from ..utils.language import has_kana, is_ascii_only, needs_llm_translation
 from .cache import TranslationCache
+from .google import GoogleTranslator
 from .model import build_model
+from .protocol import Translator
 
 logger = structlog.get_logger()
 
@@ -43,7 +47,16 @@ _LANG_NAME: dict[Language, str] = {
 _FIELD_HINT: dict[MetadataField, str] = {
     MetadataField.TITLE: "这是一部影片的标题, 翻译应简洁自然, 保留专有名词与番号.",
     MetadataField.PLOT: "这是一部影片的简介, 完整通顺地翻译全部内容.",
+    MetadataField.ACTORS: "这是演员姓名, 使用常见译名, 保留可辨识的原名.",
+    MetadataField.DIRECTORS: "这是导演姓名, 使用常见译名, 保留可辨识的原名.",
+    MetadataField.TAGS: "这是影片标签或关键词, 译文应简短, 保留专有名词与番号.",
+    MetadataField.SERIES: "这是系列名称, 翻译应简洁自然, 保留专有名词.",
+    MetadataField.PUBLISHER: "这是发行商名称, 使用通用译名.",
+    MetadataField.STUDIO: "这是制作商名称, 使用通用译名.",
 }
+
+_SENTENCE_FIELDS: frozenset[MetadataField] = frozenset({MetadataField.TITLE, MetadataField.PLOT})
+"""句子级字段: 适用字符集启发式与简繁转换. 其余词级字段直接交给 LLM."""
 
 TARGET_LANG_PLACEHOLDER = "{target_lang}"
 """自定义提示词中引用目标语言名的占位符."""
@@ -81,6 +94,15 @@ def _render_placeholders(template: str, target: Language) -> str:
     return template.replace(TARGET_LANG_PLACEHOLDER, _LANG_NAME[target])
 
 
+def _is_target_level_text(text: str, target: Language) -> bool:
+    """词级文本的粗判: 英 / 日只看字符集; 中文不跳过纯汉字, 避免漏译日文汉字词."""
+    if target == Language.EN:
+        return is_ascii_only(text)
+    if target == Language.JP:
+        return has_kana(text)
+    return False
+
+
 class LLMTranslator:
     def __init__(
         self,
@@ -106,34 +128,43 @@ class LLMTranslator:
         if not text:
             return None
 
-        if needs_llm_translation(text, target):
-            system = build_system_prompt(
-                target,
-                field,
-                system_prompt=self._system_prompt,
-                field_prompts=self._field_prompts,
-            )
-            # 缓存命中即跳过 LLM: 全缓存重刮, 配置不变时不重复翻译, 也避免 temperature 漂移.
-            # 键含 system 提示词, 改提示词后旧译文不再命中. use_cache=False 时跳过读取
-            # (强制重译), 但仍回写以刷新缓存.
-            if self._cache is not None and use_cache:
-                cached = await self._cache.get(text, target, field, system)
-                if cached is not None:
-                    return cached
-            result = await self._ask(system_prompt=system, user_prompt=text)
-            if not result:
-                return None
-            if self._cache is not None:
-                await self._cache.put(text, target, field, system, result)
-            return result
+        if field in _SENTENCE_FIELDS:
+            if needs_llm_translation(text, target):
+                return await self._translate_with_llm(text, target, field, use_cache)
+            # 中文文本: 简繁字形转换 (幂等); 共用字/已是目标变体则结果等于原文 → 返回 None 省去写回.
+            locale = _ZHCONV_LOCALE.get(target)
+            if locale is not None:
+                converted = zhconv.convert(text, locale)
+                return converted if converted != text else None
+            return None
 
-        # 中文文本: 简繁字形转换 (幂等); 共用字/已是目标变体则结果等于原文 → 返回 None 省去写回.
-        locale = _ZHCONV_LOCALE.get(target)
-        if locale is not None:
-            converted = zhconv.convert(text, locale)
-            return converted if converted != text else None
+        # 词级字段 (标签 / 人名 / 系列 / 厂商): 纯汉字可能是日文词, 不能用句子级启发式跳过.
+        if _is_target_level_text(text, target):
+            return None
+        return await self._translate_with_llm(text, target, field, use_cache)
 
-        return None
+    async def _translate_with_llm(
+        self, text: str, target: Language, field: MetadataField, use_cache: bool
+    ) -> str | None:
+        system = build_system_prompt(
+            target,
+            field,
+            system_prompt=self._system_prompt,
+            field_prompts=self._field_prompts,
+        )
+        # 缓存命中即跳过 LLM: 全缓存重刮, 配置不变时不重复翻译, 也避免 temperature 漂移.
+        # 键含 system 提示词, 改提示词后旧译文不再命中. use_cache=False 时跳过读取
+        # (强制重译), 但仍回写以刷新缓存.
+        if self._cache is not None and use_cache:
+            cached = await self._cache.get(text, target, field, system)
+            if cached is not None:
+                return cached
+        result = await self._ask(system_prompt=system, user_prompt=text)
+        if not result or result == text:
+            return None
+        if self._cache is not None:
+            await self._cache.put(text, target, field, system, result)
+        return result
 
     async def _ask(self, *, system_prompt: str, user_prompt: str) -> str | None:
         """单轮请求. 重试由 SDK 客户端承担; 无内容或抛异常时返回 ``None``, 不抛异常."""
@@ -158,15 +189,31 @@ def build_translator(
     base_url: str,
     model: str,
     rate_limit: float,
+    provider: TranslationProvider = TranslationProvider.LLM,
+    google_api_key: str | None = None,
+    google_endpoint: str = "https://translation.googleapis.com/language/translate/v2",
     proxy: str | None = None,
     system_prompt: str | None = None,
     field_prompts: Mapping[MetadataField, str] | None = None,
     cache: TranslationCache | None = None,
-) -> LLMTranslator | None:
-    """未启用或缺密钥时返回 ``None``. ``cache`` 热重载时复用同一实例."""
-    if not enabled or not api_key:
+) -> Translator | None:
+    """未启用或缺对应密钥时返回 ``None``. ``cache`` 热重载时复用同一实例."""
+    if not enabled:
         return None
-    # 翻译路径自建传输客户端 (proxy + 超时) 并交给 provider; 助理不传, 由 pydantic-ai 构造默认客户端.
+    # 翻译路径自建传输客户端 (proxy + 超时); LLM 交给 provider, Google 直接复用.
+    if provider == TranslationProvider.GOOGLE:
+        if not google_api_key:
+            return None
+        http_client = AsyncClient(proxy=proxy, timeout=Timeout(_TIMEOUT), follow_redirects=True)
+        return GoogleTranslator(
+            api_key=google_api_key,
+            endpoint=google_endpoint,
+            http_client=http_client,
+            cache=cache,
+            rate_limit=rate_limit,
+        )
+    if not api_key:
+        return None
     http_client = AsyncClient(proxy=proxy, timeout=Timeout(_TIMEOUT), follow_redirects=True)
     return LLMTranslator(
         build_model(api_type, base_url=base_url, api_key=api_key, model=model, http_client=http_client),

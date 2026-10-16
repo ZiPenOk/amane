@@ -2,10 +2,10 @@
 
 仅 ``CREATE TABLE IF NOT EXISTS``; 删除文件即清空, 下次自动重建. 与 per-site 爬取缓存正交.
 
-缓存键 = (源文本 hash, 目标语言, 字段, system 提示词 hash):
+缓存键 = (源文本 hash, 目标语言, 字段, provider 指纹):
 - 不含 number: 译文只取决于文本本身, 跨番号去重.
 - 含 field: 不同字段使用不同字段说明, 输出与字段相关.
-- 含提示词 hash: 自定义提示词与内置提示词的改动都会改变实际 system 内容, 旧译文随即失效.
+- 含 provider 指纹: LLM 用实际 system 提示词 hash, Google 用 `google:{endpoint}`; 任一侧配置变化旧译文随即失效.
 - 不含 model/temperature: 换模型重译时删除缓存文件.
 
 会话级: 单连接经 aiosqlite 内部串行化, 不随 HotSettings 热重载重建.

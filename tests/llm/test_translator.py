@@ -107,6 +107,33 @@ async def test_already_target_lang_returns_none():
 
 
 @pytest.mark.asyncio
+async def test_field_level_pure_kanji_calls_model():
+    """词级字段纯汉字可能是日文词, 不能按句子级启发式跳过."""
+    model, calls = _recording_model("译文")
+    t = _translator(model)
+    assert await t.translate("人妻", Language.ZH_CN, MetadataField.TAGS) == "译文"
+    assert calls
+
+
+@pytest.mark.asyncio
+async def test_sentence_pure_kanji_still_skipped():
+    """标题纯汉字沿用句式启发式, 不调模型."""
+    model, calls = _recording_model()
+    t = _translator(model)
+    assert await t.translate("人妻", Language.ZH_CN, MetadataField.TITLE) is None
+    assert not calls
+
+
+@pytest.mark.asyncio
+async def test_same_result_returns_none():
+    """模型返回原文时视为无需变更, 不写回也不写缓存."""
+    model, calls = _recording_model("Hello")
+    t = _translator(model)
+    assert await t.translate("Hello", Language.ZH_CN, MetadataField.PLOT) is None
+    assert calls
+
+
+@pytest.mark.asyncio
 async def test_llm_path_returns_model_result():
     t = _translator(_recording_model("译文")[0])
     assert await t.translate("Hello", Language.ZH_CN, MetadataField.TITLE) == "译文"

@@ -29,6 +29,7 @@ from amane.enums import (
     Language,
     MetadataField,
     SiteName,
+    TranslationProvider,
     WatermarkCorner,
     WatermarkKind,
 )
@@ -723,3 +724,12 @@ class TestLLMConfig:
 
         with pytest.raises(ValidationError, match=r"Input should be 'chat', 'response' or 'anthropic'"):
             mgr.update({"llm": {"api_type": "bogus"}})
+
+    def test_provider_default_and_round_trip(self, mgr: ConfigManager):
+        """默认 llm; 切到 google 后凭据与端点随 TOML 往返."""
+        assert mgr.hot.llm.provider is TranslationProvider.LLM
+
+        mgr.update({"llm": {"provider": "google", "google_api_key": "google-key"}})
+        reloaded = ConfigManager.with_cold(mgr.cold)
+        assert reloaded.hot.llm.provider is TranslationProvider.GOOGLE
+        assert reloaded.hot.llm.google_api_key == "google-key"

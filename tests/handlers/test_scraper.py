@@ -540,6 +540,78 @@ class TestScrapeTranslation:
         assert metadata.title == "[zh_cn]Mock Title"
 
     @pytest.mark.asyncio(loop_scope="function")
+    async def test_translator_applied_to_all_text_fields(self, repo: Repository, resource_store):
+        """translate_fields 覆盖全部文本字段时, 标量 / 列表 / 演员名都翻译后再持久化."""
+        from amane.enums import Language, MetadataField
+
+        class RichCrawler:
+            name = SiteName.JAVDB
+
+            def __init__(self, client=None):
+                self.client = client
+
+            async def fetch(self, query, options=None):
+                return MediaMetadata.model_validate(
+                    {
+                        "number": "MIDV-123",
+                        "title": "Mock Title",
+                        "plot": "Mock Plot",
+                        "actors": ["Actor A"],
+                        "directors": ["Director A"],
+                        "tags": ["Drama"],
+                        "series": "Mock Series",
+                        "studio": "MockStudio",
+                        "publisher": "Mock Publisher",
+                    }
+                )
+
+        class StubTranslator:
+            async def translate(self, text, target, field, *, use_cache=True):
+                return f"[{field}]{text}"
+
+        config = HotSettings()
+        config.scraping.field_language = {
+            MetadataField.TITLE: Language.ZH_CN,
+            MetadataField.PLOT: Language.ZH_CN,
+            MetadataField.ACTORS: Language.ZH_CN,
+            MetadataField.DIRECTORS: Language.ZH_CN,
+            MetadataField.TAGS: Language.ZH_CN,
+            MetadataField.SERIES: Language.ZH_CN,
+            MetadataField.PUBLISHER: Language.ZH_CN,
+            MetadataField.STUDIO: Language.ZH_CN,
+        }
+        config.llm.translate_fields = [
+            MetadataField.TITLE,
+            MetadataField.PLOT,
+            MetadataField.ACTORS,
+            MetadataField.DIRECTORS,
+            MetadataField.TAGS,
+            MetadataField.SERIES,
+            MetadataField.PUBLISHER,
+            MetadataField.STUDIO,
+        ]
+        h = ScrapeHandler(
+            repo=repo,
+            factory=FakeFactory({"javdb": RichCrawler()}),
+            resource_store=resource_store,
+            pipeline_config=config,
+            translator=StubTranslator(),
+        )
+        media = await repo.create_media_file(library_id=1, path="/media/MIDV-123.mp4")
+        await h.handle(ScrapePayload(media_file_id=media.id, number="MIDV-123", content_type=ContentType.CENSORED))
+
+        metadata = await repo.get_metadata_by_number("MIDV-123")
+        assert metadata is not None
+        assert metadata.title == "[title]Mock Title"
+        assert metadata.plot == "[plot]Mock Plot"
+        assert metadata.actors == ["[actors]Actor A"]
+        assert metadata.directors == ["[directors]Director A"]
+        assert metadata.tags == ["[tags]Drama"]
+        assert metadata.series == "[series]Mock Series"
+        assert metadata.studio == "[studio]MockStudio"
+        assert metadata.publisher == "[publisher]Mock Publisher"
+
+    @pytest.mark.asyncio(loop_scope="function")
     async def test_translator_failure_keeps_original(self, repo: Repository, factory, resource_store):
         """translator 抛异常时降级保留原值, 刮削不失败 (失败即跳过)."""
         from amane.enums import Language, MetadataField

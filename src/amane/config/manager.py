@@ -33,6 +33,7 @@ from ..enums import (
     Language,
     MetadataField,
     SiteName,
+    TranslationProvider,
     WatermarkCorner,
     WatermarkKind,
 )
@@ -43,18 +44,19 @@ from ..utils.model import kv
 
 SAFE_DIRS_ALLOW_ALL: Literal["ALLOW_ALL"] = "ALLOW_ALL"
 
-LANG_METADATA_FIELD_SET: frozenset[MetadataField] = frozenset(
-    {
-        MetadataField.TITLE,
-        MetadataField.PLOT,
-        MetadataField.ACTORS,
-        MetadataField.DIRECTORS,
-        MetadataField.TAGS,
-        MetadataField.SERIES,
-        MetadataField.PUBLISHER,
-        MetadataField.STUDIO,
-    }
+TRANSLATABLE_METADATA_FIELDS: tuple[MetadataField, ...] = (
+    MetadataField.TITLE,
+    MetadataField.PLOT,
+    MetadataField.ACTORS,
+    MetadataField.DIRECTORS,
+    MetadataField.TAGS,
+    MetadataField.SERIES,
+    MetadataField.PUBLISHER,
+    MetadataField.STUDIO,
 )
+"""可翻译的文本字段. 日期 / 时长 / URL / 评分不是自然语言, 不在此列."""
+
+LANG_METADATA_FIELD_SET: frozenset[MetadataField] = frozenset(TRANSLATABLE_METADATA_FIELDS)
 
 # json_schema_extra 需要 JsonValue 兼容类型, 使用 list[Any] 避免 pyright invariance 问题
 _SITES_WITH_API_TOKEN: list[Any] = [SiteName.THEPORNDB]
@@ -669,13 +671,19 @@ PromptText = Annotated[str, Field(max_length=PROMPT_MAX_LENGTH, json_schema_extr
 
 
 class LLMConfig(BaseModel):
-    """凭据放 Hot, 可在 UI 修改并热生效. 与 agent section 隔离."""
+    """翻译服务配置. 凭据放 Hot, 可在 UI 修改并热生效. 与 agent section 隔离."""
 
     enabled: bool = False
     """关闭时刮削管线跳过翻译步骤."""
 
-    translate_fields: list[MetadataField] = Field(default_factory=lambda: [MetadataField.TITLE, MetadataField.PLOT])
-    """当前仅支持文本标量字段 (title/plot)."""
+    provider: TranslationProvider = TranslationProvider.LLM
+    """翻译服务; 切换后只读对应分支的凭据与端点."""
+
+    translate_fields: list[MetadataField] = Field(
+        default_factory=lambda: [MetadataField.TITLE, MetadataField.PLOT],
+        json_schema_extra=kv({"items": {"enum": [str(f) for f in TRANSLATABLE_METADATA_FIELDS]}}),
+    )
+    """翻译哪些文本字段. 仅 ``TRANSLATABLE_METADATA_FIELDS`` 内的字段生效; 日期 / 时长 / URL / 评分不翻译."""
 
     system_prompt: str | None = Field(default=None, max_length=PROMPT_MAX_LENGTH, json_schema_extra={"x-long": True})
     """自定义 system 提示词的指令部分; 空白等价于未配置, 使用内置.
@@ -683,20 +691,29 @@ class LLMConfig(BaseModel):
     可用 ``{target_lang}`` 引用目标语言名; 字段说明与输出约束由 Amane 追加, 不受此值影响.
     """
 
-    field_prompts: dict[MetadataField, PromptText] = Field(default_factory=dict)
+    field_prompts: dict[MetadataField, PromptText] = Field(
+        default_factory=dict,
+        json_schema_extra=kv({"propertyNames": {"enum": [str(f) for f in TRANSLATABLE_METADATA_FIELDS]}}),
+    )
     """逐字段覆盖内置字段说明; 值为空白的条目等价于未配置.
 
     可用 ``{target_lang}`` 引用目标语言名. 未列出的字段使用内置说明.
     """
 
     api_key: str | None = None
-    """为空时即使 enabled 也不翻译."""
+    """LLM 上游密钥; provider=llm 时为空即不翻译."""
 
     api_type: ApiType = ApiType.CHAT
     base_url: str = "https://api.openai.com/v1"
     model: str = ""
     rate_limit: float = Field(default=2.0, ge=0.1, le=100)
-    """与站点限速隔离."""
+    """与站点限速隔离; LLM 与 Google 共用."""
+
+    google_api_key: str | None = None
+    """Google Cloud Translation API 密钥; provider=google 时为空即不翻译."""
+
+    google_endpoint: str = "https://translation.googleapis.com/language/translate/v2"
+    """Google Cloud Translation Basic v2 端点; 可指向兼容镜像."""
 
     @field_validator("system_prompt")
     @classmethod

@@ -598,12 +598,16 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
         resources_removed = 0
         if self._config.scraping.cleanup_resources_after_organize:
             # 已整理影片的外链主资源已经复制到媒体目录; 释放 ResourceStore 中的副本.
-            # 仍被其他未整理影片引用的同一 URL 保留, 内部派生/上传资源也保留以免详情页失效.
-            organized_urls = await _collect_metadata_resource_refs(self._repo, organized_metadata_ids)
-            remaining_urls, _remaining_hashes = await _collect_live_resource_refs(
+            # 仍被其他未整理影片引用的同一资源保留.
+            organized_urls, organized_hashes = await _collect_metadata_resource_refs(
+                self._repo, organized_metadata_ids
+            )
+            remaining_urls, remaining_hashes = await _collect_live_resource_refs(
                 self._repo, excluded_metadata_ids=organized_metadata_ids
             )
-            resources_removed = await self._resource_store.purge_selected(organized_urls - remaining_urls)
+            resources_removed = await self._resource_store.purge_selected(
+                organized_urls - remaining_urls, organized_hashes - remaining_hashes
+            )
             all_live_urls, all_live_hashes = await _collect_live_resource_refs(self._repo)
             resources_removed += await self._resource_store.purge_unreferenced(all_live_urls, all_live_hashes)
 
@@ -686,19 +690,19 @@ async def _collect_live_resource_refs(
     return live_urls, live_hashes
 
 
-async def _collect_metadata_resource_refs(repo: Repository, metadata_ids: set[int]) -> set[str]:
-    """收集指定 Metadata 的外链资源; 内部 URL 由整理后的本地文件继续承载."""
+async def _collect_metadata_resource_refs(repo: Repository, metadata_ids: set[int]) -> tuple[set[str], set[str]]:
+    """收集指定 Metadata 的所有 Resource 引用."""
     urls: set[str] = set()
+    hashes: set[str] = set()
     for metadata_id in metadata_ids:
         metadata = await repo.get_metadata(metadata_id)
         if metadata is None:
             continue
-        for url in (*metadata.poster_urls, *metadata.thumb_urls, *metadata.trailer_urls):
-            if url.startswith(("http://", "https://")):
-                urls.add(url)
-        for site_urls in metadata.extrafanart_urls.values():
-            urls.update(url for url in site_urls if url.startswith(("http://", "https://")))
-    return urls
+        # 只回收已复制为影片图片的 thumb / poster; trailer 与剧照仍由各自的
+        # copy_resources / extrafanart 流程管理, 避免未复制时误删资源.
+        for url in (*metadata.poster_urls, *metadata.thumb_urls):
+            _add_resource_ref(url, urls, hashes)
+    return urls, hashes
 
 
 @in_thread

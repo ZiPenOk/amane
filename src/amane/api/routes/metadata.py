@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Annotated, cast
 
 import structlog
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import TypeAdapter
 
 from ...aggregate import compute_merge_updates
@@ -22,6 +23,7 @@ from ...parsing import FilePhaseSummary as ParsedFilePhase
 from ...utils.dates import normalize_calendar_date
 from ...utils.model import to_resp
 from ..deps import RepoDep, RuntimeDep
+from ..metadata_images import localize_metadata_images, serve_library_image
 from ..models import (
     CommentResponse,
     CropPosterRequest,
@@ -153,12 +155,12 @@ async def list_metadata(
     empty = FilePhaseSummary()
     return MetadataListResponse(
         items=[
-            to_resp(MetadataResponse, m).model_copy(
+            await localize_metadata_images(repo, m, to_resp(MetadataResponse, m).model_copy(
                 update={
                     "file_count": summaries[m.id].file_count if m.id in summaries else 0,
                     "file_phase": _file_phase_resp(summaries[m.id].phase) if m.id in summaries else empty,
                 }
-            )
+            ))
             for m in items
         ],
         total=total,
@@ -242,12 +244,12 @@ async def get_metadata(metadata_id: int, repo: RepoDep) -> MetadataDetailRespons
         series_id,
     ) = await repo.resolve_metadata_facet_ids(metadata)
     return MetadataDetailResponse(
-        metadata=to_resp(MetadataResponse, metadata).model_copy(
+        metadata=await localize_metadata_images(repo, metadata, to_resp(MetadataResponse, metadata).model_copy(
             update={
                 "file_count": len(files),
                 "file_phase": _file_phase_resp(summarize_file_phases(file_phase_of(f) for f in files)),
             }
-        ),
+        )),
         files=[to_resp(MediaFileResponse, f) for f in files],
         user_tags=[to_resp(UserTagResponse, t) for t in user_tags],
         comments=[to_resp(CommentResponse, c) for c in comments],
@@ -259,6 +261,13 @@ async def get_metadata(metadata_id: int, repo: RepoDep) -> MetadataDetailRespons
         publisher_id=publisher_id,
         series_id=series_id,
     )
+
+
+@router.get("/{metadata_id}/images/{kind}", include_in_schema=False)
+async def get_library_image(metadata_id: int, kind: str, repo: RepoDep) -> FileResponse:
+    if kind not in {"thumb", "poster", "fanart"}:
+        raise HTTPException(status_code=404, detail="图片类型不存在")
+    return await serve_library_image(repo, metadata_id, kind)  # type: ignore[arg-type]
 
 
 @router.patch("/{metadata_id}")

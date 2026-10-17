@@ -371,6 +371,10 @@ class ScrapingConfig(BaseModel):
         default=True,
         description="浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘",
     )
+    cleanup_resources_after_organize: bool = Field(
+        default=True,
+        description="整理完成后清理未被元数据引用的刮削资源; 关闭后保留资源目录缓存",
+    )
     crop_poster: bool = True
 
     poster_ratio: float = Field(default=0.7, ge=0.3, le=1.0)

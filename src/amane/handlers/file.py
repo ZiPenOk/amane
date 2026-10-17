@@ -592,10 +592,12 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
         if prune_candidates:
             pruned_dirs = (await prune_empty_dirs(prune_candidates, library_root=library_root)).removed
 
-        # 刮削阶段可能下载多个候选图; Metadata 只保留实际采用的首个成功候选,
-        # 整理成功后回收其余不再引用的 Resource.
-        live_urls, live_hashes = await _collect_live_resource_refs(self._repo)
-        resources_removed = await self._resource_store.purge_unreferenced(live_urls, live_hashes)
+        resources_removed = 0
+        if self._config.scraping.cleanup_resources_after_organize:
+            # 刮削阶段可能下载多个候选图; Metadata 只保留实际采用的首个成功候选,
+            # 整理成功后回收其余不再引用的 Resource.
+            live_urls, live_hashes = await _collect_live_resource_refs(self._repo)
+            resources_removed = await self._resource_store.purge_unreferenced(live_urls, live_hashes)
 
         logger.info(
             "organize completed",

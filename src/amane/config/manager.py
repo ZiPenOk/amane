@@ -373,7 +373,7 @@ class ScrapingConfig(BaseModel):
     )
     cleanup_resources_after_organize: bool = Field(
         default=True,
-        description="整理完成后清理未被元数据引用的刮削资源; 关闭后保留资源目录缓存",
+        description="整理完成后删除已复制到媒体目录的外链刮削资源; 关闭后保留资源目录缓存",
     )
     crop_poster: bool = True
 

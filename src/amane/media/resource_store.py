@@ -540,6 +540,16 @@ class ResourceStore:
             removed += 1
         return removed
 
+    async def purge_selected(self, urls: set[str]) -> int:
+        """删除指定的外链 Resource; 内部派生/上传资源不通过此入口删除."""
+        removed = 0
+        for resource in await self.list_all():
+            if resource.url not in urls or not resource.url.startswith(("http://", "https://")):
+                continue
+            await self.invalidate(resource.url)
+            removed += 1
+        return removed
+
     @staticmethod
     def _hash_file(path: Path) -> str:
         h = hashlib.sha256()

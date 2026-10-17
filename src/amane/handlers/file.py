@@ -512,6 +512,7 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
         total = len(live)
         # 只有移动方式会移走源文件, 复制 / 硬链接 / 符号链接不腾空目录.
         prune_candidates: set[Path] = set()
+        organized_metadata_ids: set[int] = set()
         collect_prune = payload.prune_empty_dirs and library.move_mode is MoveMode.MOVE
         if total == 0:
             await self.report_progress(1, 1, "done")
@@ -555,6 +556,8 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
                 match fop_result.outcome:
                     case PlaceOutcome.PLACED:
                         organized += 1
+                        if media_file.metadata_id is not None:
+                            organized_metadata_ids.add(media_file.metadata_id)
                         if collect_prune:
                             prune_candidates.update(ancestor_dirs(file_path, library_root=library_root))
                         # 字幕冲突的 path 是留在原处的那条字幕, 不是视频源路径.
@@ -594,10 +597,15 @@ class OrganizeHandler(TaskHandler[OrganizePayload, OrganizeResult]):
 
         resources_removed = 0
         if self._config.scraping.cleanup_resources_after_organize:
-            # 刮削阶段可能下载多个候选图; Metadata 只保留实际采用的首个成功候选,
-            # 整理成功后回收其余不再引用的 Resource.
-            live_urls, live_hashes = await _collect_live_resource_refs(self._repo)
-            resources_removed = await self._resource_store.purge_unreferenced(live_urls, live_hashes)
+            # 已整理影片的外链主资源已经复制到媒体目录; 释放 ResourceStore 中的副本.
+            # 仍被其他未整理影片引用的同一 URL 保留, 内部派生/上传资源也保留以免详情页失效.
+            organized_urls = await _collect_metadata_resource_refs(self._repo, organized_metadata_ids)
+            remaining_urls, _remaining_hashes = await _collect_live_resource_refs(
+                self._repo, excluded_metadata_ids=organized_metadata_ids
+            )
+            resources_removed = await self._resource_store.purge_selected(organized_urls - remaining_urls)
+            all_live_urls, all_live_hashes = await _collect_live_resource_refs(self._repo)
+            resources_removed += await self._resource_store.purge_unreferenced(all_live_urls, all_live_hashes)
 
         logger.info(
             "organize completed",
@@ -639,7 +647,9 @@ def _add_resource_ref(url: str, live_urls: set[str], live_hashes: set[str]) -> N
         live_urls.add(url)
 
 
-async def _collect_live_resource_refs(repo: Repository) -> tuple[set[str], set[str]]:
+async def _collect_live_resource_refs(
+    repo: Repository, *, excluded_metadata_ids: set[int] | None = None
+) -> tuple[set[str], set[str]]:
     live_urls: set[str] = set()
     live_hashes: set[str] = set()
     offset = 0
@@ -650,6 +660,8 @@ async def _collect_live_resource_refs(repo: Repository) -> tuple[set[str], set[s
         if not batch:
             break
         for meta in batch:
+            if meta.id is not None and meta.id in (excluded_metadata_ids or set()):
+                continue
             for u in (*meta.poster_urls, *meta.thumb_urls, *meta.trailer_urls):
                 _add_resource_ref(u, live_urls, live_hashes)
             for site_urls in meta.extrafanart_urls.values():
@@ -672,6 +684,21 @@ async def _collect_live_resource_refs(repo: Repository) -> tuple[set[str], set[s
         if len(actors) < page:
             break
     return live_urls, live_hashes
+
+
+async def _collect_metadata_resource_refs(repo: Repository, metadata_ids: set[int]) -> set[str]:
+    """收集指定 Metadata 的外链资源; 内部 URL 由整理后的本地文件继续承载."""
+    urls: set[str] = set()
+    for metadata_id in metadata_ids:
+        metadata = await repo.get_metadata(metadata_id)
+        if metadata is None:
+            continue
+        for url in (*metadata.poster_urls, *metadata.thumb_urls, *metadata.trailer_urls):
+            if url.startswith(("http://", "https://")):
+                urls.add(url)
+        for site_urls in metadata.extrafanart_urls.values():
+            urls.update(url for url in site_urls if url.startswith(("http://", "https://")))
+    return urls
 
 
 @in_thread

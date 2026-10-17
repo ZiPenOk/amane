@@ -46,8 +46,12 @@ def internal_url(store: ResourceStore, locator_url: str) -> str:
 
 
 def _success_first(urls: list[str], succeeded: set[str]) -> list[str]:
-    # 成功者保序前置, 失败者保序置于尾部. succeeded 为空时幂等返回原序.
-    return [u for u in urls if u in succeeded] + [u for u in urls if u not in succeeded]
+    # 只保留第一个成功资源; 其余候选若下载成功也不再写入 Metadata, 便于整理后回收缓存.
+    # 失败候选保留为外链备用, succeeded 为空时幂等返回原序.
+    first = next((u for u in urls if u in succeeded), None)
+    if first is None:
+        return list(urls)
+    return [first] + [u for u in urls if u not in succeeded]
 
 
 def sr_args_dict(cfg: SrConfig) -> dict:
@@ -111,7 +115,7 @@ async def materialize_images(
     *,
     extrafanart_urls: dict[str, list[str]] | None = None,
 ) -> MaterializedImages:
-    """仅下载集合内的类型; 未选中的保留聚合 URL.
+    """仅下载集合内的类型; 每类只保留首个成功候选, 失败候选保留为外链备用.
 
     死 URL 保序置于尾部, 供来源恢复后重试.
     extrafanart 仅下载到 Resource, 站点分组结构不重排.

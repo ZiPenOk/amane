@@ -1,5 +1,6 @@
 """海报裁剪与封面角标. 判定函数只依赖尺寸与阈值, 无 I/O."""
 
+import io
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -40,6 +41,44 @@ def probe_size(path: Path) -> tuple[int, int] | None:
     except Exception as e:
         logger.debug("probe_size failed", path=str(path), error=str(e))
         return None
+
+
+#: 上传图片的像素上限: 再大只会拖住解码, 正常封面/海报远低于这个量级.
+MAX_UPLOAD_PIXELS = 100_000_000
+
+
+def normalize_upload_image(data: bytes, *, jpeg_quality: int = _DEFAULT_JPEG_QUALITY) -> bytes:
+    """上传图片 → JPEG 字节; 非图片 / 尺寸异常抛 ``ValueError`` (消息可直接作 API detail).
+
+    不缩放也不裁剪: 海报原样保存, 封面由调用方决定怎么裁. 带透明通道的图铺白底, 避免转 RGB 变黑.
+    """
+    try:
+        with Image.open(io.BytesIO(data)) as src:
+            src.load()
+            width, height = src.size
+            if width <= 0 or height <= 0:
+                raise ValueError("图片尺寸无效")
+            if width * height > MAX_UPLOAD_PIXELS:
+                raise ValueError("图片尺寸过大")
+            if src.mode in ("RGBA", "LA", "P"):
+                rgba = src.convert("RGBA")
+                img = Image.new("RGB", rgba.size, "white")
+                img.paste(rgba, mask=rgba.getchannel("A"))
+            else:
+                img = src.convert("RGB")
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.debug("upload image decode failed", error=str(e))
+        raise ValueError("无法识别的图片") from e
+
+    out = io.BytesIO()
+    try:
+        img.save(out, format="JPEG", quality=jpeg_quality)
+    except Exception as e:
+        logger.debug("upload image encode failed", error=str(e))
+        raise ValueError("图片转换失败") from e
+    return out.getvalue()
 
 
 def should_crop_poster(

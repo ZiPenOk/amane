@@ -237,6 +237,49 @@ class ResourceStore:
 
         return dest
 
+    async def put_upload(self, data: bytes, *, ext: str = ".jpg") -> Resource:
+        """上传的图片写入资源目录并登记; 内容相同 (sha256) 复用同一条记录."""
+        locator = f"upload://{hashlib.sha256(data).hexdigest()}"
+        dest = self._compute_path(locator, ext=ext)
+        async with self._serialized(locator):
+            existing = await self.get_by_url(locator)
+            if existing is not None and self._matches_record(self.full_path(existing), existing):
+                return existing
+
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name(f"{dest.stem}.{uuid4().hex}.part{dest.suffix}")
+            try:
+                tmp.write_bytes(data)
+                tmp.replace(dest)
+            finally:
+                tmp.unlink(missing_ok=True)
+
+            size = dest.stat().st_size
+            mime = mimetypes.guess_type(str(dest))[0]
+            content_hash = self._hash_file(dest)
+            meta = {"op": "upload"}
+            async with self._session() as session:
+                if existing is not None:
+                    existing.file_path = self._relative_path(dest)
+                    existing.content_hash = content_hash
+                    existing.size = size
+                    existing.mime_type = mime
+                    existing.meta = meta
+                    session.add(existing)
+                    await session.commit()
+                    return existing
+                record = Resource(
+                    url=locator,
+                    file_path=self._relative_path(dest),
+                    content_hash=content_hash,
+                    size=size,
+                    mime_type=mime,
+                    meta=meta,
+                )
+                session.add(record)
+                await session.commit()
+                return record
+
     async def resolve_source(self, url: str, client: WebClient) -> ResolvedSource | None:
         """处理入口的源解析: 内部 URL 定位既有 Resource, 外部仅接受 http(s), 其余返回 None."""
         internal = internal_url_hash(url)

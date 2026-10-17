@@ -1166,6 +1166,38 @@ export const Body_install_pluginSchema = {
     title: 'Body_install_plugin'
 } as const;
 
+export const Body_upload_poster_imageSchema = {
+    properties: {
+        file: {
+            type: 'string',
+            contentMediaType: 'application/octet-stream',
+            title: 'File',
+            description: '竖版海报, 已裁好'
+        }
+    },
+    type: 'object',
+    required: [
+        'file'
+    ],
+    title: 'Body_upload_poster_image'
+} as const;
+
+export const Body_upload_thumb_imageSchema = {
+    properties: {
+        file: {
+            type: 'string',
+            contentMediaType: 'application/octet-stream',
+            title: 'File',
+            description: '横版封面'
+        }
+    },
+    type: 'object',
+    required: [
+        'file'
+    ],
+    title: 'Body_upload_thumb_image'
+} as const;
+
 export const BrowserBackendNameSchema = {
     type: 'string',
     enum: [

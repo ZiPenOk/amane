@@ -32,6 +32,7 @@ import {
   IconRefresh,
   IconStar,
   IconTrash,
+  IconUpload,
   IconX,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -52,6 +53,8 @@ import {
   setMetadataLocksMutation,
   submitTaskMutation,
   updateMetadataMutation,
+  uploadPosterImageMutation,
+  uploadThumbImageMutation,
 } from "@/client/@tanstack/react-query.gen";
 import { getMetadataSchema } from "@/client/sdk.gen";
 import type { MetadataField, MetadataResponse } from "@/client/types.gen";
@@ -253,6 +256,52 @@ function TitleDetailPage() {
 
   const ensureTagsMutation = useMutation(createUserTagsMutation());
   const applyTagsMutation = useMutation(batchMetadataUserTagsMutation());
+
+  const posterInputRef = useRef<HTMLInputElement | null>(null);
+  const thumbInputRef = useRef<HTMLInputElement | null>(null);
+
+  function handleImageUploaded(message: string) {
+    notifications.show({ message, color: "blue" });
+    setThumbBroken(false);
+    setPosterBroken(false);
+    invalidateDetail();
+    void queryClient.invalidateQueries({ queryKey: listMetadataQueryKey() });
+  }
+
+  const uploadPosterMutation = useMutation({
+    ...uploadPosterImageMutation(),
+    onSuccess: () => handleImageUploaded(t("detail.upload.posterSuccess")),
+    onError: (err) =>
+      notifications.show({
+        message: extractErrorMessage(err, t("common:toast.operationFailed")),
+        color: "red",
+      }),
+  });
+
+  const uploadThumbMutation = useMutation({
+    ...uploadThumbImageMutation(),
+    onSuccess: () => handleImageUploaded(t("detail.upload.thumbSuccess")),
+    onError: (err) =>
+      notifications.show({
+        message: extractErrorMessage(err, t("common:toast.operationFailed")),
+        color: "red",
+      }),
+  });
+
+  // 海报: 已是竖版, 直接覆盖 poster 文件; 封面: 横版, 同时覆盖 thumb / fanart 并裁出 poster.
+  function handlePickImage(kind: "poster" | "thumb", selected: FileList | null) {
+    const file = selected?.[0];
+    if (file == null) return;
+    if (!file.type.startsWith("image/")) {
+      notifications.show({ message: t("detail.upload.notImage"), color: "red" });
+      return;
+    }
+    if (kind === "poster") {
+      uploadPosterMutation.mutate({ path: { metadata_id: id }, body: { file } });
+    } else {
+      uploadThumbMutation.mutate({ path: { metadata_id: id }, body: { file } });
+    }
+  }
 
   const [pendingLock, setPendingLock] = useState<MetadataField | null>(null);
   const [lockTarget, setLockTarget] = useState<{ id: number; fields: MetadataField[] } | null>(
@@ -583,6 +632,48 @@ function TitleDetailPage() {
                 </Button>
               </Box>
             </Tooltip>
+            <Tooltip label={t("detail.upload.posterHint")}>
+              <Button
+                size="xs"
+                variant="light"
+                leftSection={<IconUpload size={14} />}
+                loading={uploadPosterMutation.isPending}
+                onClick={() => posterInputRef.current?.click()}
+              >
+                {t("detail.upload.posterAction")}
+              </Button>
+            </Tooltip>
+            <Tooltip label={t("detail.upload.thumbHint")}>
+              <Button
+                size="xs"
+                variant="light"
+                leftSection={<IconUpload size={14} />}
+                loading={uploadThumbMutation.isPending}
+                onClick={() => thumbInputRef.current?.click()}
+              >
+                {t("detail.upload.thumbAction")}
+              </Button>
+            </Tooltip>
+            <input
+              ref={posterInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                handlePickImage("poster", event.currentTarget.files);
+                event.currentTarget.value = "";
+              }}
+            />
+            <input
+              ref={thumbInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                handlePickImage("thumb", event.currentTarget.files);
+                event.currentTarget.value = "";
+              }}
+            />
             <LockChip label={t("detail.fields.thumb")} {...lockProps("thumb_urls")} />
             <LockChip label={t("detail.fields.poster")} {...lockProps("poster_urls")} />
             <LockChip label={t("detail.fields.trailer")} {...lockProps("trailer_urls")} />

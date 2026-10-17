@@ -38,6 +38,7 @@ git log --oneline main..dev
 | Google 免费翻译 (gtx) | `src/amane/llm/google.py` + `build_translator`, 配置 `LLMConfig.provider` / `google_endpoint` | 上游改 `llm/` 或 `build_translator` 时人工合并 |
 | 全字段翻译 | `src/amane/handlers/scrape.py::_translate_metadata` + `TRANSLATABLE_METADATA_FIELDS` | 上游改翻译步骤时人工合并 |
 | 中字水印按番号配对 | `src/amane/parsing/file_info.py::subtitle_matches_video` + `library/rules.py` / `cleanup/inventory.py` 的调用点 | 上游改水印判定或 `has_companion_subtitle` 时人工合并 |
+| 上传海报 / 封面直接覆盖库图 | `src/amane/api/routes/metadata.py` 的上传接口 + `src/amane/media/placement.py` | 上传写 Resource 后按库模板立刻覆盖 thumb / poster / fanart; 上游改 metadata 路由或整理模板时人工合并 |
 | 字幕语言统一 chs/cht | `src/amane/parsing/file_info.py::detect_subtitle_language`, 占位符 `{srt_lang}` | 上游改字幕命名或模板占位符时人工合并 |
 | Emby 媒体库刷新通知 | `src/amane/emby.py` + `AsyncWorker` 结算钩子, 配置 `EmbyConfig` | 新增文件; 上游改 `scheduler/worker.py` 的结算路径时确认钩子仍在 |
 | SmartStrm 远端删除通知 | `src/amane/smartstrm.py` + `handlers/delete.py` 的挂点, 配置 `SmartStrmConfig` | 新增文件; 上游改 `DeleteHandler` 时人工合并 |

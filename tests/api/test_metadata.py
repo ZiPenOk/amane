@@ -1,5 +1,6 @@
 """/metadata HTTP 接线: 状态码、JSON 形状、422. 列表筛选/级联删除见 tests/db; 合并规则见 tests/aggregate."""
 
+import io
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,6 +17,12 @@ if TYPE_CHECKING:
     from httpx2 import AsyncClient
 
     from amane.db.repository import Repository
+
+
+def _png_bytes(size: tuple[int, int] = (800, 538), color: str = "blue") -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", size, color).save(out, format="PNG")
+    return out.getvalue()
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -178,6 +185,130 @@ class TestMetadataHttp:
         assert (
             await client.post("metadata/99999/crop-poster", json={"left": 0, "top": 0, "right": 10, "bottom": 10})
         ).status_code == 404
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_upload_poster_writes_library_file(self, client: AsyncClient, repo: Repository, tmp_path: Path):
+        """上传竖版海报: 写 poster_urls 并立刻覆盖 <video_name>-poster.jpg, 不动封面与背景图."""
+        meta = await repo.upsert_metadata(number="UP-P-001")
+        assert meta.id is not None
+        lib_dir = tmp_path / "lib"
+        library = await repo.create_library(
+            name="upload-poster",
+            path=str(lib_dir),
+            video_template="{number}/{number}.{ext}",
+            thumb_template="{video_dir}/{video_name}-thumb.jpg",
+            poster_template="{video_dir}/{video_name}-poster.jpg",
+            fanart_template="{video_dir}/{video_name}-fanart.jpg",
+        )
+        assert library.id is not None
+        await repo.create_media_file(
+            library_id=library.id, path=str(lib_dir / "UP-P-001" / "UP-P-001.mp4"), metadata_id=meta.id
+        )
+
+        resp = await client.post(
+            f"metadata/{meta.id}/poster/upload", files={"file": ("poster.png", _png_bytes((300, 420)), "image/png")}
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["poster_urls"][0].startswith("/api/resources/")
+        assert "poster_urls" in body["locked_fields"]
+
+        work_dir = lib_dir / "UP-P-001"
+        poster = work_dir / "UP-P-001-poster.jpg"
+        assert poster.exists()
+        with Image.open(poster) as img:
+            assert img.size == (300, 420)
+        assert not (work_dir / "UP-P-001-thumb.jpg").exists()
+        assert not (work_dir / "UP-P-001-fanart.jpg").exists()
+
+        bad = await client.post(
+            f"metadata/{meta.id}/poster/upload", files={"file": ("poster.txt", b"not an image", "text/plain")}
+        )
+        assert bad.status_code == 400
+        assert "图片" in bad.json()["detail"]
+        empty = await client.post(f"metadata/{meta.id}/poster/upload", files={"file": ("poster.png", b"", "image/png")})
+        assert empty.status_code == 400
+        assert (
+            await client.post("metadata/99999/poster/upload", files={"file": ("p.png", b"x", "image/png")})
+        ).status_code == 404
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_upload_thumb_writes_thumb_fanart_and_cropped_poster(
+        self, client: AsyncClient, repo: Repository, tmp_path: Path
+    ):
+        """上传横版封面: thumb 与 fanart 同图同尺寸, 海报按当前比例从右侧裁出, 三张一起覆盖."""
+        meta = await repo.upsert_metadata(number="UP-T-001")
+        assert meta.id is not None
+        lib_dir = tmp_path / "lib"
+        library = await repo.create_library(
+            name="upload-thumb",
+            path=str(lib_dir),
+            video_template="{number}/{number}.{ext}",
+            thumb_template="{video_dir}/{video_name}-thumb.jpg",
+            poster_template="{video_dir}/{video_name}-poster.jpg",
+            fanart_template="{video_dir}/{video_name}-fanart.jpg",
+        )
+        assert library.id is not None
+        await repo.create_media_file(
+            library_id=library.id, path=str(lib_dir / "UP-T-001" / "UP-T-001.mp4"), metadata_id=meta.id
+        )
+
+        resp = await client.post(
+            f"metadata/{meta.id}/thumb/upload", files={"file": ("thumb.png", _png_bytes((800, 538)), "image/png")}
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["thumb_urls"][0].startswith("/api/resources/")
+        assert body["poster_urls"][0].startswith("/api/resources/")
+        assert {"thumb_urls", "poster_urls"} <= set(body["locked_fields"])
+
+        work_dir = lib_dir / "UP-T-001"
+        thumb = work_dir / "UP-T-001-thumb.jpg"
+        fanart = work_dir / "UP-T-001-fanart.jpg"
+        poster = work_dir / "UP-T-001-poster.jpg"
+        assert thumb.exists() and fanart.exists() and poster.exists()
+        assert thumb.read_bytes() == fanart.read_bytes()
+        with Image.open(thumb) as img:
+            assert img.size == (800, 538)
+        with Image.open(poster) as img:
+            assert img.size == (int(538 * 0.7), 538)
+
+    @pytest.mark.asyncio(loop_scope="function")
+    async def test_crop_poster_writes_library_file(
+        self, client: AsyncClient, app: FastAPI, repo: Repository, tmp_path: Path
+    ):
+        """手动裁海报同样立刻覆盖库文件, 不必等下一次整理."""
+        meta = await repo.upsert_metadata(number="UP-C-001", thumb_urls=["https://example.com/t.jpg"])
+        assert meta.id is not None
+        lib_dir = tmp_path / "lib"
+        library = await repo.create_library(
+            name="crop-poster",
+            path=str(lib_dir),
+            video_template="{number}/{number}.{ext}",
+            thumb_template="{video_dir}/{video_name}-thumb.jpg",
+            poster_template="{video_dir}/{video_name}-poster.jpg",
+            fanart_template="{video_dir}/{video_name}-fanart.jpg",
+        )
+        assert library.id is not None
+        await repo.create_media_file(
+            library_id=library.id, path=str(lib_dir / "UP-C-001" / "UP-C-001.mp4"), metadata_id=meta.id
+        )
+
+        async def fake_download(url: str, dest: Path, **kwargs: object) -> bool:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (800, 538), "blue").save(dest)
+            return True
+
+        app.state.runtime.web_client.download = fake_download  # type: ignore[method-assign]
+
+        resp = await client.post(
+            f"metadata/{meta.id}/crop-poster", json={"left": 421, "top": 0, "right": 800, "bottom": 538}
+        )
+        assert resp.status_code == 200, resp.text
+        poster = lib_dir / "UP-C-001" / "UP-C-001-poster.jpg"
+        assert poster.exists()
+        with Image.open(poster) as img:
+            assert img.size == (379, 538)
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_locks_http(self, client: AsyncClient, repo: Repository):

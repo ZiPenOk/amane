@@ -6,12 +6,14 @@ from .images import (
     crop_poster,
     format_crop_box_args,
     needs_upscale,
+    normalize_upload_image,
     probe_size,
     should_crop_poster,
     validate_crop_box,
 )
 from .nfo import write_nfo
-from .pipeline import MaterializedImages, manual_crop_image, materialize_images
+from .pipeline import MaterializedImages, internal_url, manual_crop_image, materialize_images
+from .placement import write_library_images
 from .resource_store import AcquireResult, CompressOutcome, ResourceStore, UpscaleOutcome, derived_locator
 
 __all__ = [
@@ -27,11 +29,14 @@ __all__ = [
     "crop_poster",
     "derived_locator",
     "format_crop_box_args",
+    "internal_url",
     "manual_crop_image",
     "materialize_images",
     "needs_upscale",
+    "normalize_upload_image",
     "probe_size",
     "should_crop_poster",
     "validate_crop_box",
+    "write_library_images",
     "write_nfo",
 ]

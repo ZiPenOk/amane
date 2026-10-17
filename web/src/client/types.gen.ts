@@ -640,6 +640,30 @@ export type BodyInstallPlugin = {
 };
 
 /**
+ * Body_upload_poster_image
+ */
+export type BodyUploadPosterImage = {
+    /**
+     * File
+     *
+     * 竖版海报, 已裁好
+     */
+    file: Blob | File;
+};
+
+/**
+ * Body_upload_thumb_image
+ */
+export type BodyUploadThumbImage = {
+    /**
+     * File
+     *
+     * 横版封面
+     */
+    file: Blob | File;
+};
+
+/**
  * BrowserBackendName
  */
 export type BrowserBackendName = 'off' | 'patchright' | 'camoufox' | 'solver';
@@ -6038,6 +6062,66 @@ export type CropPosterFromThumbResponses = {
 };
 
 export type CropPosterFromThumbResponse = CropPosterFromThumbResponses[keyof CropPosterFromThumbResponses];
+
+export type UploadPosterImageData = {
+    body: BodyUploadPosterImage;
+    path: {
+        /**
+         * Metadata Id
+         */
+        metadata_id: number;
+    };
+    query?: never;
+    url: '/api/metadata/{metadata_id}/poster/upload';
+};
+
+export type UploadPosterImageErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UploadPosterImageError = UploadPosterImageErrors[keyof UploadPosterImageErrors];
+
+export type UploadPosterImageResponses = {
+    /**
+     * Successful Response
+     */
+    200: MetadataResponse;
+};
+
+export type UploadPosterImageResponse = UploadPosterImageResponses[keyof UploadPosterImageResponses];
+
+export type UploadThumbImageData = {
+    body: BodyUploadThumbImage;
+    path: {
+        /**
+         * Metadata Id
+         */
+        metadata_id: number;
+    };
+    query?: never;
+    url: '/api/metadata/{metadata_id}/thumb/upload';
+};
+
+export type UploadThumbImageErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UploadThumbImageError = UploadThumbImageErrors[keyof UploadThumbImageErrors];
+
+export type UploadThumbImageResponses = {
+    /**
+     * Successful Response
+     */
+    200: MetadataResponse;
+};
+
+export type UploadThumbImageResponse = UploadThumbImageResponses[keyof UploadThumbImageResponses];
 
 export type MergeMetadataData = {
     body: MergeRequest;

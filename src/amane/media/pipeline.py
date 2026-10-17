@@ -41,7 +41,7 @@ class MaterializedImages:
     trailer_urls: list[str]
 
 
-def _internal_url(store: ResourceStore, locator_url: str) -> str:
+def internal_url(store: ResourceStore, locator_url: str) -> str:
     return f"{RESOURCE_URL_PREFIX}/{store.url_hash(locator_url)}"
 
 
@@ -173,7 +173,7 @@ async def materialize_images(
             if crop_res:
                 await _maybe_upscale(store, crop_res, config, data_dir)
                 await _maybe_compress(store, crop_res, config)
-                result_poster_urls = [_internal_url(store, crop_res.url)]
+                result_poster_urls = [internal_url(store, crop_res.url)]
             else:
                 result_poster_urls = _success_first(poster_urls, poster_ok)
         else:
@@ -250,4 +250,4 @@ async def manual_crop_image(
 
     await _maybe_upscale(store, crop_res, config, data_dir)
     await _maybe_compress(store, crop_res, config)
-    return _internal_url(store, crop_res.url)
+    return internal_url(store, crop_res.url)

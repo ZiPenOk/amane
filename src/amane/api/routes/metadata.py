@@ -1,15 +1,22 @@
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, cast
 
 import structlog
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from pydantic import TypeAdapter
 
 from ...aggregate import compute_merge_updates
-from ...db.models import MetadataSortField, SavedQueryEntity, SortOrder, TaskType
+from ...db.models import MetadataSortField, Resource, SavedQueryEntity, SortOrder, TaskType
 from ...db.repo_types import WriteMode
 from ...db.repos.media import file_phase_of
 from ...handlers import ScrapePayload
-from ...media import manual_crop_image
+from ...media import (
+    crop_poster,
+    internal_url,
+    manual_crop_image,
+    normalize_upload_image,
+    write_library_images,
+)
 from ...parsing import DEFINITION_VALUES, ContentType, Mosaic, infer_content_type, summarize_file_phases
 from ...parsing import FilePhaseSummary as ParsedFilePhase
 from ...utils.dates import normalize_calendar_date
@@ -42,6 +49,30 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
+
+#: 上传图片的大小上限; 正常封面/海报远低于此, 超过直接拒绝而不是先读进内存再判.
+MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+async def _store_uploaded_image(file: UploadFile, runtime: RuntimeDep) -> tuple[Resource, bytes]:
+    """读上传 → 校验并转 JPEG → 写 Resource; 返回 (resource, 落盘字节)."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+    if len(data) > MAX_IMAGE_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="图片不能超过 20MB")
+    try:
+        normalized = normalize_upload_image(data, jpeg_quality=runtime.config.hot.scraping.jpeg_quality)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    resource = await runtime.resource_store.put_upload(normalized)
+    return resource, normalized
+
+
+async def _resource_bytes(runtime: RuntimeDep, url: str) -> bytes | None:
+    """内部 / 外部 URL → 本地字节; 取不到返回 None (海报已写库, 这里失败不影响元数据)."""
+    source = await runtime.resource_store.resolve_source(url, runtime.web_client)
+    return source.path.read_bytes() if source is not None else None
 
 
 def _file_phase_resp(summary: ParsedFilePhase) -> FilePhaseSummary:
@@ -302,11 +333,80 @@ async def crop_poster_from_thumb(
     # 写回 poster_urls
     updated = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, poster_urls=[poster_url])
     assert updated is not None
+    # 立刻覆盖库里的海报文件, 不必等下一次整理.
+    poster_data = await _resource_bytes(runtime, poster_url)
+    written = await write_library_images(repo, updated, poster=poster_data)
     logger.info(
         "poster cropped",
         metadata_id=metadata_id,
         box=box,
         poster_url=poster_url,
+        written=[str(p) for p in written],
+    )
+    return to_resp(MetadataResponse, updated)
+
+
+@router.post("/{metadata_id}/poster/upload")
+async def upload_poster_image(
+    metadata_id: int,
+    file: Annotated[UploadFile, File(description="竖版海报, 已裁好")],
+    repo: RepoDep,
+    runtime: RuntimeDep,
+) -> MetadataResponse:
+    """上传已裁好的竖版海报: 写 poster_urls 并立刻覆盖库里的海报文件."""
+    if await repo.get_metadata(metadata_id) is None:
+        raise HTTPException(status_code=404, detail="影片不存在")
+    resource, data = await _store_uploaded_image(file, runtime)
+    poster_url = internal_url(runtime.resource_store, resource.url)
+    updated = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, poster_urls=[poster_url])
+    assert updated is not None
+    written = await write_library_images(repo, updated, poster=data)
+    logger.info("poster uploaded", metadata_id=metadata_id, poster_url=poster_url, written=[str(p) for p in written])
+    return to_resp(MetadataResponse, updated)
+
+
+@router.post("/{metadata_id}/thumb/upload")
+async def upload_thumb_image(
+    metadata_id: int,
+    file: Annotated[UploadFile, File(description="横版封面")],
+    repo: RepoDep,
+    runtime: RuntimeDep,
+) -> MetadataResponse:
+    """上传横版封面: 立刻覆盖 thumb 与 fanart (同图), 并按当前比例裁出海报一起覆盖.
+
+    fanart 与 thumb 同尺寸同内容, 这是整理时的约定 (``_copy_resources`` 用 thumb 写 fanart);
+    海报用刮削管线同一个裁法: 取封面右侧, 宽 = 高 × ``poster_ratio``.
+    """
+    if await repo.get_metadata(metadata_id) is None:
+        raise HTTPException(status_code=404, detail="影片不存在")
+    resource, data = await _store_uploaded_image(file, runtime)
+    store = runtime.resource_store
+    scraping = runtime.config.hot.scraping
+    thumb_url = internal_url(store, resource.url)
+    updated = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, thumb_urls=[thumb_url])
+    assert updated is not None
+
+    thumb_source = store.full_path(resource)
+    ratio = scraping.poster_ratio
+
+    async def crop_producer(dest: Path) -> bool:
+        return crop_poster(thumb_source, dest, poster_ratio=ratio, jpeg_quality=scraping.jpeg_quality)
+
+    poster_data: bytes | None = None
+    crop_res = await store.acquire_derived(resource.url, "crop", f"{ratio:.4f}", crop_producer)
+    if crop_res is not None:
+        poster_url = internal_url(store, crop_res.url)
+        updated = await repo.update_metadata(metadata_id, mode=WriteMode.MANUAL, poster_urls=[poster_url])
+        assert updated is not None
+        poster_data = store.full_path(crop_res).read_bytes()
+
+    written = await write_library_images(repo, updated, thumb=data, fanart=data, poster=poster_data)
+    logger.info(
+        "thumb uploaded",
+        metadata_id=metadata_id,
+        thumb_url=thumb_url,
+        poster=poster_data is not None,
+        written=[str(p) for p in written],
     )
     return to_resp(MetadataResponse, updated)
 

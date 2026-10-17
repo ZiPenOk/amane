@@ -143,6 +143,15 @@
       "success": "Poster updated",
       "noThumb": "A cover image is required to crop a poster"
     },
+    "upload": {
+      "posterAction": "Upload poster",
+      "posterHint": "Portrait poster (already cropped), overwrites the poster file in the library",
+      "thumbAction": "Upload cover",
+      "thumbHint": "Landscape cover: overwrites cover and fanart, and crops the poster from it",
+      "posterSuccess": "Poster replaced",
+      "thumbSuccess": "Cover, fanart and poster replaced",
+      "notImage": "Select an image file"
+    },
     "playbackCopyTimestamp": "Copy timestamp",
     "playbackCopyLink": "Copy link to current time",
     "playbackCopied": "Copied to clipboard",

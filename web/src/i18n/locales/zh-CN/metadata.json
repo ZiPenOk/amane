@@ -140,6 +140,15 @@
       "success": "海报已更新",
       "noThumb": "需要封面图才能裁切海报"
     },
+    "upload": {
+      "posterAction": "上传海报",
+      "posterHint": "竖版海报（已裁好），直接覆盖库里的海报文件",
+      "thumbAction": "上传封面",
+      "thumbHint": "横版封面：同时覆盖封面与背景图，并按比例裁出海报",
+      "posterSuccess": "海报已替换",
+      "thumbSuccess": "封面、背景图与海报已替换",
+      "notImage": "请选择图片文件"
+    },
     "playbackCopyTimestamp": "复制时间戳",
     "playbackCopyLink": "复制当前时间的链接",
     "playbackCopied": "已复制到剪贴板",

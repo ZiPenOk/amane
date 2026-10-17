@@ -4092,11 +4092,17 @@ export type ScrapingConfig = {
      */
     download_resources?: Array<DownloadableResource>;
     /**
-     * Cache Preview Images
+     * Passthrough Preview Images
      *
-     * 浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘
+     * 浏览网页或接口预览外链图片时只透传, 不写入资源目录; 关闭后缓存图片
      */
-    cache_preview_images?: boolean;
+    passthrough_preview_images?: boolean;
+    /**
+     * Cleanup Resources After Organize
+     *
+     * 整理完成后删除已复制到媒体目录的外链刮削资源; 关闭后保留资源目录缓存
+     */
+    cleanup_resources_after_organize?: boolean;
     /**
      * Crop Poster
      */

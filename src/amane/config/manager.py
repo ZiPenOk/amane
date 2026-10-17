@@ -367,9 +367,9 @@ class ScrapingConfig(BaseModel):
         default_factory=lambda: [r for r in DownloadableResource if r != DownloadableResource.trailer],
         description="刮削时自动下载到 Resource 目录的资源类型",
     )
-    cache_preview_images: bool = Field(
-        default=True,
-        description="浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘",
+    passthrough_preview_images: bool = Field(
+        default=False,
+        description="浏览网页或接口预览外链图片时只透传, 不写入资源目录; 关闭后缓存图片",
     )
     cleanup_resources_after_organize: bool = Field(
         default=True,
@@ -468,11 +468,14 @@ class ScrapingConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _drop_removed_fields(cls, data: Any) -> Any:
-        """丢弃已移除的 skip_existing / write_nfo / debug_capture."""
+        """迁移已改名字段并丢弃已移除的旧字段."""
         if isinstance(data, dict):
             data.pop("skip_existing", None)
             data.pop("write_nfo", None)
             data.pop("debug_capture", None)
+            if "cache_preview_images" in data and "passthrough_preview_images" not in data:
+                data["passthrough_preview_images"] = not bool(data["cache_preview_images"])
+            data.pop("cache_preview_images", None)
         return data
 
     @model_validator(mode="before")

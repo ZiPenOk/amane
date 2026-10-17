@@ -1,6 +1,6 @@
 """本地文件按 url hash 直出 (无选源/裁剪/超分).
 SR 可能就地覆盖 (URL 不变, 字节变), 须 ETag + no-cache 再验证.
-``/proxy`` 默认把外链图缓存进 ResourceStore; ``scraping.cache_preview_images`` 关闭时只透传不落盘.
+``/proxy`` 由 ``scraping.passthrough_preview_images`` 控制; 开启时只透传不落盘.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ async def proxy_image(
 ) -> Response:
     """上游失败记入进程内负缓存 (15 分钟), 窗口内同 URL 直接 502.
     同 URL 进行中请求合并为一次 acquire.
-    ``scraping.cache_preview_images`` 关闭时只透传字节, 不写资源目录.
+    ``scraping.passthrough_preview_images`` 开启时只透传字节, 不写资源目录.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -79,7 +79,7 @@ async def proxy_image(
     if failures.is_blocked(url):
         raise HTTPException(status_code=502, detail="上游图片获取失败")
 
-    if not runtime.config.hot.scraping.cache_preview_images:
+    if runtime.config.hot.scraping.passthrough_preview_images:
         return await _passthrough_image(runtime, failures, url)
 
     # 同 URL 进行中的 acquire 合并为一次

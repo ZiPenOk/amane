@@ -123,7 +123,7 @@ class TestProxyImage:
 
     @pytest.mark.asyncio(loop_scope="function")
     async def test_passthrough_when_preview_cache_disabled(self, client: AsyncClient, app, monkeypatch):
-        """关闭 cache_preview_images 时只透传字节, 不落盘 (acquire 不被调用)."""
+        """开启 passthrough_preview_images 时只透传字节, 不落盘 (acquire 不被调用)."""
         png_data = b"\x89PNG\r\n\x1a\n passthrough body"
         mock_web = AsyncMock()
         mock_web.get_bytes = AsyncMock(return_value=png_data)
@@ -133,7 +133,7 @@ class TestProxyImage:
         mock_store.acquire = AsyncMock(return_value=None)
         monkeypatch.setattr(app.state.runtime, "resource_store", mock_store)
 
-        monkeypatch.setattr(app.state.runtime.config.hot.scraping, "cache_preview_images", False)
+        monkeypatch.setattr(app.state.runtime.config.hot.scraping, "passthrough_preview_images", True)
 
         url = "http://example.com/image.png"
         resp = await client.get(f"resources/proxy?url={url}")
@@ -150,7 +150,7 @@ class TestProxyImage:
         mock_web = AsyncMock()
         mock_web.get_bytes = AsyncMock(side_effect=RequestError("http://example.com/x.png", "boom"))
         monkeypatch.setattr(app.state.runtime, "web_client", mock_web)
-        monkeypatch.setattr(app.state.runtime.config.hot.scraping, "cache_preview_images", False)
+        monkeypatch.setattr(app.state.runtime.config.hot.scraping, "passthrough_preview_images", True)
 
         url = "http://example.com/missing.png"
         first = await client.get(f"resources/proxy?url={url}")

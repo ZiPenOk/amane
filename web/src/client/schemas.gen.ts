@@ -2997,7 +2997,8 @@ export const HotSettingsSchema = {
                     'poster',
                     'extrafanart'
                 ],
-                cache_preview_images: true,
+                passthrough_preview_images: false,
+                cleanup_resources_after_organize: true,
                 crop_poster: true,
                 poster_ratio: 0.7,
                 poster_crop_skip_ratio: 0.9,
@@ -7865,10 +7866,16 @@ export const ScrapingConfigSchema = {
             title: 'Download Resources',
             description: '刮削时自动下载到 Resource 目录的资源类型'
         },
-        cache_preview_images: {
+        passthrough_preview_images: {
             type: 'boolean',
-            title: 'Cache Preview Images',
-            description: '浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘',
+            title: 'Passthrough Preview Images',
+            description: '浏览网页或接口预览外链图片时只透传, 不写入资源目录; 关闭后缓存图片',
+            default: false
+        },
+        cleanup_resources_after_organize: {
+            type: 'boolean',
+            title: 'Cleanup Resources After Organize',
+            description: '整理完成后删除已复制到媒体目录的外链刮削资源; 关闭后保留资源目录缓存',
             default: true
         },
         crop_poster: {

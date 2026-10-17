@@ -34,9 +34,13 @@
   },
   "fields": {
     "scraping": {
-      "cache_preview_images": {
-        "label": "Cache preview images",
-        "description": "Cache external preview images into the resource directory while browsing the UI; when off they are streamed without being stored"
+      "passthrough_preview_images": {
+        "label": "Stream external preview images",
+        "description": "When enabled, external preview images are streamed without being stored; when off, they are cached"
+      },
+      "cleanup_resources_after_organize": {
+        "label": "Clean resources after organize",
+        "description": "Delete image resources after they are copied into the media directory; when off, keep them in the resource directory"
       },
       "download_resources": {
         "label": "Download on scrape",

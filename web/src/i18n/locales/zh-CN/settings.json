@@ -34,9 +34,13 @@
   },
   "fields": {
     "scraping": {
-      "cache_preview_images": {
-        "label": "缓存外链预览图",
-        "description": "浏览网页或接口预览外链图片时缓存进资源目录; 关闭后只透传, 不写盘"
+      "passthrough_preview_images": {
+        "label": "外链预览图只透传",
+        "description": "开启后浏览网页或接口预览外链图片时只透传, 不写入资源目录; 关闭后缓存图片"
+      },
+      "cleanup_resources_after_organize": {
+        "label": "整理后清理资源",
+        "description": "整理完成后删除已复制到媒体目录的图片资源, 关闭后保留资源目录中的图片"
       },
       "download_resources": {
         "label": "刮削时下载",

@@ -491,7 +491,9 @@ class WebClient:
     async def _probe(self, url: str, *, use_proxy: bool) -> tuple[int | None, str]:
         """HEAD 探测 Content-Length 与重定向终址; 探测失败时终址回退为 ``url``."""
         try:
-            resp = await self.request("HEAD", url, use_proxy=use_proxy)
+            # HEAD 仅用于可选探测; 部分 CDN 对 HEAD 不响应, 不应让默认重试把
+            # 后续真实 GET 下载拖慢数十秒.
+            resp = await self.request("HEAD", url, use_proxy=use_proxy, max_attempts=1)
         except RequestError:
             return None, url
         final_url = str(resp.url) if resp.url else url

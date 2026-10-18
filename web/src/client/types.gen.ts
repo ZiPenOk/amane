@@ -1702,13 +1702,17 @@ export type FileListResponse = {
 /**
  * FilePhaseSummary
  *
- * 关联文件相位聚合: 任一文件具备即亮; definition 取最高档.
+ * 条目相位聚合; 判定见 ``parsing/file_info.py::summarize_file_phases``, definition 取最高档.
  */
 export type FilePhaseSummary = {
     /**
      * Has Subtitle
      */
     has_subtitle?: boolean;
+    /**
+     * Censored
+     */
+    censored?: boolean;
     /**
      * Uncensored
      */
@@ -2454,8 +2458,15 @@ export type MediaFileResponse = {
      */
     number?: string | null;
     status: MediaFileStatus;
-    content_type: ContentType;
     mosaic?: Mosaic | null;
+    /**
+     * Censored
+     */
+    censored?: boolean;
+    /**
+     * Uncensored
+     */
+    uncensored?: boolean;
     /**
      * Has Subtitle
      */
@@ -2576,7 +2587,7 @@ export type MetadataBatchScrapeRequest = {
      */
     ids: Array<number>;
     /**
-     * 内容类型; None = 服务端推断 (挂载文件路径 → 番号模式)
+     * 内容类型; None = 用条目已落定的类型 (不重新推断)
      */
     content_type?: ContentType | null;
     /**
@@ -2793,6 +2804,7 @@ export type MetadataResponse = {
      * Number
      */
     number: string;
+    content_type: ContentType;
     /**
      * Title
      */
@@ -2853,6 +2865,10 @@ export type MetadataResponse = {
      * Score
      */
     score?: number | null;
+    /**
+     * Vr
+     */
+    vr?: boolean;
     /**
      * Poster Urls
      */
@@ -2951,8 +2967,10 @@ export type MetadataUserTagsRequest = {
 
 /**
  * Mosaic
+ *
+ * 马赛克标记; 有码是条目类型, 不在此列.
  */
-export type Mosaic = 'censored' | 'uncensored' | 'cracked' | 'leaked';
+export type Mosaic = 'uncensored' | 'cracked' | 'leaked';
 
 /**
  * MoveMode
@@ -5526,7 +5544,7 @@ export type ListMediaData = {
         /**
          * Uncensored
          *
-         * Filter by uncensored (mosaic marker or uncensored content type)
+         * Filter by uncensored (own marker or uncensored number content type)
          */
         uncensored?: boolean | null;
         /**
@@ -5538,7 +5556,7 @@ export type ListMediaData = {
         /**
          * Content Type
          *
-         * Filter by content type
+         * Filter by owning number content type
          */
         content_type?: ContentType | null;
         /**
@@ -5793,6 +5811,12 @@ export type ListMetadataData = {
          */
         has_subtitle?: boolean | null;
         /**
+         * Vr
+         *
+         * Filter by VR marker (entry tag vocabulary)
+         */
+        vr?: boolean | null;
+        /**
          * Mosaic
          *
          * Filter by linked file mosaic marker
@@ -5801,7 +5825,7 @@ export type ListMetadataData = {
         /**
          * Uncensored
          *
-         * Filter by uncensored file (mosaic marker or uncensored content type)
+         * Filter by uncensored number (own content type or linked file marker)
          */
         uncensored?: boolean | null;
         /**
@@ -5813,7 +5837,7 @@ export type ListMetadataData = {
         /**
          * Content Type
          *
-         * Filter by linked file content type
+         * Filter by number content type
          */
         content_type?: ContentType | null;
         /**

@@ -6,13 +6,13 @@ import pytest
 
 from amane.parsing import (
     ContentType,
-    Mosaic,
     detect_cd,
     detect_subtitle_language,
     extract_number,
     infer_content_type,
     is_amateur,
     is_uncensored,
+    is_vr,
     parse_file_info,
     split_number,
 )
@@ -39,7 +39,7 @@ CASES: list[object] = [
     _Case("MIDV-123-2.mp4", cd=2, number="MIDV-123"),
     _Case("MIDV-123-3.mp4", cd=3, number="MIDV-123"),
     _Case("MIDV-123-9.mp4", cd=9, number="MIDV-123"),
-    _Case("MIDV-123.mp4", mosaic="censored", number="MIDV-123"),
+    _Case("MIDV-123.mp4", number="MIDV-123"),
     _Case("MIDV-123-0.mp4"),
     _Case("MIDV-123-01.mp4"),
     _Case("MIDV-123-10.mp4"),
@@ -73,9 +73,8 @@ CASES: list[object] = [
     _Case("MIDV-123-U.mp4", mosaic="cracked", number="MIDV-123"),
     _Case("MIDV-123-C-U.mp4", has_subtitle=True, mosaic="cracked", number="MIDV-123"),
     _Case("MIDV-123-U-CD1.mp4", cd=1, mosaic="cracked", number="MIDV-123"),
-    # 无文件名标记: 有码番号 mosaic=censored; 无码番号 mosaic=uncensored
-    _Case("HEYZO-123.mp4", mosaic="uncensored", number="HEYZO-123"),
-    _Case("HEYZO-123-1080p.mp4", mosaic="uncensored", definition="1080p", number="HEYZO-123"),
+    _Case("HEYZO-123.mp4", number="HEYZO-123"),
+    _Case("HEYZO-123-1080p.mp4", definition="1080p", number="HEYZO-123"),
     _Case("HEYZO-123-流出.mp4", mosaic="leaked", number="HEYZO-123"),
     _Case("HEYZO-123-U.mp4", mosaic="cracked", number="HEYZO-123"),
     # --- 分辨率: 点号 / 连字符 ---
@@ -113,28 +112,26 @@ CASES: list[object] = [
     _Case("ABC-123.1080p60.mp4", definition="1080p", number="ABC-123"),
     _Case("ABC-123.2160p30.mp4", definition="4K", number="ABC-123"),
     # 分辨率数字不得被番号规则吸走: 无短横线的日期号 + 分辨率
-    _Case("120115_318-mura-1080p.mp4", definition="1080p", mosaic="uncensored", number="120115_318"),
-    _Case("120115_318-mura-720p.mp4", definition="720p", mosaic="uncensored", number="120115_318"),
-    _Case("120115_318-mura-2160p.mp4", definition="4K", mosaic="uncensored", number="120115_318"),
-    _Case("120115_318-mura-1440p.mp4", definition="1440p", mosaic="uncensored", number="120115_318"),
-    _Case("120115_318-mura-480p.mp4", definition="480p", mosaic="uncensored", number="120115_318"),
-    _Case("112912_776-mura-whole1_hd.wmv", definition="HD", mosaic="uncensored", number="112912_776"),
+    _Case("120115_318-mura-1080p.mp4", definition="1080p", number="120115_318"),
+    _Case("120115_318-mura-720p.mp4", definition="720p", number="120115_318"),
+    _Case("120115_318-mura-2160p.mp4", definition="4K", number="120115_318"),
+    _Case("120115_318-mura-1440p.mp4", definition="1440p", number="120115_318"),
+    _Case("120115_318-mura-480p.mp4", definition="480p", number="120115_318"),
+    _Case("112912_776-mura-whole1_hd.wmv", definition="HD", number="112912_776"),
     # 无码官网的站点名写在番号前/后: 归一成 6 位日期号, 类型判无码
-    _Case("101526_01-10MU.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
-    _Case("10MU-101526_01.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
-    _Case("1pondo-093024_001.mp4", mosaic="uncensored", number="093024_001", content_type=ContentType.UNCENSORED),
-    _Case("101526_01-paco.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED),
-    _Case("121315-001-carib.mp4", mosaic="uncensored", number="121315-001", content_type=ContentType.UNCENSORED),
+    _Case("101526_01-10MU.mp4", number="101526_01", content_type=ContentType.UNCENSORED),
+    _Case("10MU-101526_01.mp4", number="101526_01", content_type=ContentType.UNCENSORED),
+    _Case("1pondo-093024_001.mp4", number="093024_001", content_type=ContentType.UNCENSORED),
+    _Case("101526_01-paco.mp4", number="101526_01", content_type=ContentType.UNCENSORED),
+    _Case("121315-001-carib.mp4", number="121315-001", content_type=ContentType.UNCENSORED),
     # 站点名之外还挂着别的标记 (方括号标签 / 尾随词 / 站点前缀): 一样归一成日期号
-    _Case("[10MU] 091926_01-10MU.mp4", mosaic="uncensored", number="091926_01", content_type=ContentType.UNCENSORED),
-    _Case("091926_01-10MU【無修正】.mp4", mosaic="uncensored", number="091926_01", content_type=ContentType.UNCENSORED),
-    _Case(
-        "hhd800.com@10MU-101526_01.mp4", mosaic="uncensored", number="101526_01", content_type=ContentType.UNCENSORED
-    ),
+    _Case("[10MU] 091926_01-10MU.mp4", number="091926_01", content_type=ContentType.UNCENSORED),
+    _Case("091926_01-10MU【無修正】.mp4", number="091926_01", content_type=ContentType.UNCENSORED),
+    _Case("hhd800.com@10MU-101526_01.mp4", number="101526_01", content_type=ContentType.UNCENSORED),
     # 分集 + 分辨率
     _Case("MIDV-123-4K-CD1.mp4", cd=1, definition="4K", number="MIDV-123"),
     # --- 分辨率误报: 番号/编码里的字母数字不当作独立标记 ---
-    _Case("SKYHD-172.mp4", mosaic="uncensored", number="SKYHD-172"),
+    _Case("SKYHD-172.mp4", number="SKYHD-172"),
     _Case("ABC-123.HDTV.mp4", number="ABC-123"),
     _Case("ABC-123.4KS.mp4", number="ABC-123"),
     _Case("ABC-2160.mp4"),
@@ -177,15 +174,13 @@ CASES: list[object] = [
     _Case("/media/SSIS-456.mp4", number="SSIS-456", content_type=ContentType.CENSORED),
     _Case("/media/FC2-PPV-1234567.mp4", number="FC2-1234567", content_type=ContentType.FC2),
     _Case("/media/FC2PPV1234567.mp4", number="FC2-1234567", content_type=ContentType.FC2),
-    _Case("/media/HEYZO-1234.mp4", mosaic="uncensored", number="HEYZO-1234", content_type=ContentType.UNCENSORED),
-    _Case(
-        "/media/H4610-ki221218.mp4", mosaic="uncensored", number="H4610-KI221218", content_type=ContentType.UNCENSORED
-    ),
-    _Case("/media/S2MBD-006.mp4", mosaic="uncensored", number="S2MBD-006", content_type=ContentType.UNCENSORED),
-    _Case("/media/SMBD-005.mp4", mosaic="uncensored", number="SMBD-005", content_type=ContentType.UNCENSORED),
-    _Case("/media/gachig256.mp4", mosaic="uncensored", number="GACHIG-256", content_type=ContentType.UNCENSORED),
-    _Case("/media/DRGBD-045.mp4", mosaic="uncensored", number="DRGBD-045", content_type=ContentType.UNCENSORED),
-    _Case("/media/SMDV-028.mp4", mosaic="uncensored", number="SMDV-028", content_type=ContentType.UNCENSORED),
+    _Case("/media/HEYZO-1234.mp4", number="HEYZO-1234", content_type=ContentType.UNCENSORED),
+    _Case("/media/H4610-ki221218.mp4", number="H4610-KI221218", content_type=ContentType.UNCENSORED),
+    _Case("/media/S2MBD-006.mp4", number="S2MBD-006", content_type=ContentType.UNCENSORED),
+    _Case("/media/SMBD-005.mp4", number="SMBD-005", content_type=ContentType.UNCENSORED),
+    _Case("/media/gachig256.mp4", number="GACHIG-256", content_type=ContentType.UNCENSORED),
+    _Case("/media/DRGBD-045.mp4", number="DRGBD-045", content_type=ContentType.UNCENSORED),
+    _Case("/media/SMDV-028.mp4", number="SMDV-028", content_type=ContentType.UNCENSORED),
     _Case("/media/MD0165-1.mp4", cd=1, number="MD0165-1", content_type=ContentType.CHINESE),
     _Case("/media/259LUXU-1456.mp4", number="259LUXU-1456", content_type=ContentType.AMATEUR),
     _Case("/media/SIRO-4567.mp4", number="SIRO-4567", content_type=ContentType.AMATEUR),
@@ -194,10 +189,10 @@ CASES: list[object] = [
     _Case("/media/T29-001.mp4", number="T29-001", content_type=ContentType.CENSORED),
     _Case("/media/T38-068-CD1.mp4", cd=1, number="T38-068", content_type=ContentType.CENSORED),
     _Case("/media/T38-068/video.mp4", number="T38-068", content_type=ContentType.CENSORED),
-    _Case("/media/010115-001.mp4", mosaic="uncensored", number="010115-001", content_type=ContentType.UNCENSORED),
-    _Case("/media/010115_001.mp4", mosaic="uncensored", number="010115_001", content_type=ContentType.UNCENSORED),
-    _Case("/media/010115_01.mp4", mosaic="uncensored", number="010115_01", content_type=ContentType.UNCENSORED),
-    _Case("/media/010115-001/video.mp4", mosaic="uncensored", number="010115-001", content_type=ContentType.UNCENSORED),
+    _Case("/media/010115-001.mp4", number="010115-001", content_type=ContentType.UNCENSORED),
+    _Case("/media/010115_001.mp4", number="010115_001", content_type=ContentType.UNCENSORED),
+    _Case("/media/010115_01.mp4", number="010115_01", content_type=ContentType.UNCENSORED),
+    _Case("/media/010115-001/video.mp4", number="010115-001", content_type=ContentType.UNCENSORED),
     _Case("/media/38-068.mp4", number="38-068", content_type=ContentType.WESTERN),
     _Case("/media/欧美/T38-068.mp4", number="T38-068", content_type=ContentType.WESTERN),
     _Case("/media/欧美/010115-001.mp4", number="010115-001", content_type=ContentType.WESTERN),
@@ -255,7 +250,7 @@ CASES: list[object] = [
     _Case("/media/MIDV-123/video.mp4", number="MIDV-123", content_type=ContentType.CENSORED),
     _Case("/media/SSIS-456/MIDV-123.mp4", number="MIDV-123", content_type=ContentType.CENSORED),
     _Case("/media/FC2-1234567/movie.mkv", number="FC2-1234567", content_type=ContentType.FC2),
-    _Case("/media/HEYZO-1234/clip.mp4", mosaic="uncensored", number="HEYZO-1234", content_type=ContentType.UNCENSORED),
+    _Case("/media/HEYZO-1234/clip.mp4", number="HEYZO-1234", content_type=ContentType.UNCENSORED),
     _Case("/media/MIDV-123-uncensored/video.mp4", number="MIDV-123"),
     _Case("/media/Studio Name/video.mp4", number="VIDEO", content_type=ContentType.WESTERN),
     _Case("/media/downloads/video.mp4", number="VIDEO", content_type=ContentType.WESTERN),
@@ -265,8 +260,8 @@ CASES: list[object] = [
     _Case("/media/DISC01/video.mp4", number="VIDEO", content_type=ContentType.WESTERN),
     _Case("/media/Vol.12/video.mp4", number="VIDEO", content_type=ContentType.WESTERN),
     _Case("/media/FC2-1111111/MIDV-123/video.mp4", number="MIDV-123"),
-    _Case("/media/n1234/clip.mp4", mosaic="uncensored", number="n1234", content_type=ContentType.UNCENSORED),
-    _Case("/media/k1363/clip.mp4", mosaic="uncensored", number="k1363", content_type=ContentType.UNCENSORED),
+    _Case("/media/n1234/clip.mp4", number="n1234", content_type=ContentType.UNCENSORED),
+    _Case("/media/k1363/clip.mp4", number="k1363", content_type=ContentType.UNCENSORED),
     # k 系要求字母前不是字母: MK1234 仍是普通有码番号
     _Case("/media/MK1234.mp4", number="MK-1234", content_type=ContentType.CENSORED),
     # --- 完整路径: 分集只认直接父目录 CDn/PARTn ---
@@ -351,10 +346,7 @@ def test_parse_file_info(case: _Case) -> None:
     info = parse_file_info(case.path)
     assert info.cd == case.cd
     assert info.has_subtitle is case.has_subtitle
-    expected_mosaic = case.mosaic
-    if expected_mosaic is None and info.content_type is ContentType.CENSORED:
-        expected_mosaic = Mosaic.CENSORED
-    assert info.mosaic == expected_mosaic
+    assert info.mosaic == case.mosaic
     assert info.definition == case.definition
     if case.number is not None:
         assert info.number == case.number
@@ -573,7 +565,6 @@ def test_parse_file_info_escape_strings(path: str, extra: list[str], number: str
 
 MOSAIC_CANONICAL_ROUNDTRIP: list[tuple[str, str]] = [
     ("MIDV-123-U.mp4", "cracked"),
-    ("MIDV-123.mp4", "censored"),
     ("MIDV-123-無碼.mp4", "uncensored"),
     ("MIDV-123-流出.mp4", "leaked"),
 ]
@@ -585,3 +576,30 @@ def test_mosaic_canonical_filename_roundtrip(source: str, canonical: str) -> Non
     assert info.mosaic == canonical
     again = parse_file_info(f"MIDV-123-{canonical}.mp4")
     assert again.mosaic == canonical
+
+
+VR_CASES: list[tuple[list[str], bool]] = [
+    ([], False),
+    (["単体作品", "ハイビジョン", "中出し"], False),
+    (["VR"], True),
+    (["vr"], True),
+    (["  VR専用  "], True),
+    (["8KVR"], True),
+    (["ハイクオリティVR"], True),
+    (["VR作品"], True),
+    (["VR専用作品"], True),
+    (["単体作品", "vr専用"], True),
+    # 含 VR 字样的其它标签不命中
+    (["VRっぽい"], False),
+    (["8K VR"], False),
+    (["ハイクオリティ VR"], False),
+    (["ＶＲ"], False),
+    # 番号不参与判定: 厂商前缀里的 VR 与含 VR 的非 VR 番号都无法区分
+    (["MDVR-123"], False),
+    (["SVR-123"], False),
+]
+
+
+@pytest.mark.parametrize(("tags", "expected"), VR_CASES)
+def test_is_vr(tags: list[str], expected: bool) -> None:
+    assert is_vr(tags) is expected

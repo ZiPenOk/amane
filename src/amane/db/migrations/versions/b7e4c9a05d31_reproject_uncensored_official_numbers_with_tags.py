@@ -37,12 +37,9 @@ def upgrade() -> None:
         if not _DATE_ID.fullmatch(info.number) or info.number == number:
             continue
         conn.execute(
-            text(
-                "UPDATE media_files SET number = :number, content_type = :content_type, mosaic = :mosaic WHERE id = :id"
-            ),
+            text("UPDATE media_files SET number = :number, mosaic = :mosaic WHERE id = :id"),
             {
                 "number": info.number,
-                "content_type": info.content_type.name,
                 "mosaic": info.mosaic.name if info.mosaic is not None else None,
                 "id": row_id,
             },

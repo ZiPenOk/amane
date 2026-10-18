@@ -43,9 +43,12 @@ async def find_library_image(repo: Repository, metadata: Metadata, kind: ImageKi
     return None
 
 
-async def localize_metadata_images(repo: Repository, metadata: Metadata, response: MetadataResponse) -> MetadataResponse:
+async def localize_metadata_images(
+    repo: Repository, metadata: Metadata, response: MetadataResponse
+) -> MetadataResponse:
     updates: dict[str, str] = {}
-    for kind, field in (("thumb", "thumb_url"), ("poster", "poster_url")):
+    image_fields: tuple[tuple[ImageKind, str], ...] = (("thumb", "thumb_url"), ("poster", "poster_url"))
+    for kind, field in image_fields:
         if await find_library_image(repo, metadata, kind):
             updates[field] = f"/api/metadata/{metadata.id}/images/{kind}"
     return response.model_copy(update=updates) if updates else response

@@ -2911,6 +2911,11 @@ export const FilePhaseSummarySchema = {
             title: 'Has Subtitle',
             default: false
         },
+        censored: {
+            type: 'boolean',
+            title: 'Censored',
+            default: false
+        },
         uncensored: {
             type: 'boolean',
             title: 'Uncensored',
@@ -2938,7 +2943,7 @@ export const FilePhaseSummarySchema = {
     },
     type: 'object',
     title: 'FilePhaseSummary',
-    description: '关联文件相位聚合: 任一文件具备即亮; definition 取最高档.'
+    description: '条目相位聚合; 判定见 ``parsing/file_info.py::summarize_file_phases``, definition 取最高档.'
 } as const;
 
 export const FootprintNoticeKindSchema = {
@@ -3026,7 +3031,8 @@ export const HotSettingsSchema = {
                         'javdb',
                         'fc2ppvdb',
                         'fc2',
-                        'freejavbt'
+                        'freejavbt',
+                        'airav'
                     ],
                     hentai: [
                         'getchu',
@@ -4988,9 +4994,6 @@ export const MediaFileResponseSchema = {
         status: {
             $ref: '#/components/schemas/MediaFileStatus'
         },
-        content_type: {
-            $ref: '#/components/schemas/ContentType'
-        },
         mosaic: {
             anyOf: [
                 {
@@ -5000,6 +5003,16 @@ export const MediaFileResponseSchema = {
                     type: 'null'
                 }
             ]
+        },
+        censored: {
+            type: 'boolean',
+            title: 'Censored',
+            default: false
+        },
+        uncensored: {
+            type: 'boolean',
+            title: 'Uncensored',
+            default: false
         },
         has_subtitle: {
             type: 'boolean',
@@ -5058,8 +5071,7 @@ export const MediaFileResponseSchema = {
         'id',
         'library_id',
         'path',
-        'status',
-        'content_type'
+        'status'
     ],
     title: 'MediaFileResponse'
 } as const;
@@ -5238,7 +5250,7 @@ export const MetadataBatchScrapeRequestSchema = {
                     type: 'null'
                 }
             ],
-            description: '内容类型; None = 服务端推断 (挂载文件路径 → 番号模式)'
+            description: '内容类型; None = 用条目已落定的类型 (不重新推断)'
         },
         use_cache: {
             items: {
@@ -5691,6 +5703,9 @@ export const MetadataResponseSchema = {
             type: 'string',
             title: 'Number'
         },
+        content_type: {
+            $ref: '#/components/schemas/ContentType'
+        },
         title: {
             anyOf: [
                 {
@@ -5844,6 +5859,11 @@ export const MetadataResponseSchema = {
             ],
             title: 'Score'
         },
+        vr: {
+            type: 'boolean',
+            title: 'Vr',
+            default: false
+        },
         poster_urls: {
             items: {
                 type: 'string'
@@ -5950,7 +5970,8 @@ export const MetadataResponseSchema = {
     type: 'object',
     required: [
         'id',
-        'number'
+        'number',
+        'content_type'
     ],
     title: 'MetadataResponse'
 } as const;
@@ -6012,12 +6033,12 @@ export const MetadataUserTagsRequestSchema = {
 export const MosaicSchema = {
     type: 'string',
     enum: [
-        'censored',
         'uncensored',
         'cracked',
         'leaked'
     ],
-    title: 'Mosaic'
+    title: 'Mosaic',
+    description: '马赛克标记; 有码是条目类型, 不在此列.'
 } as const;
 
 export const MoveModeSchema = {

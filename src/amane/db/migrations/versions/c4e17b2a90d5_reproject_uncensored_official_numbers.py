@@ -19,7 +19,7 @@ from amane.parsing import ContentType, parse_file_info
 
 # revision identifiers, used by Alembic.
 revision: str = "c4e17b2a90d5"
-down_revision: str | None = "1fdf4d41aac1"
+down_revision: str | None = "9054ebacea29"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -37,12 +37,9 @@ def upgrade() -> None:
         if not _DATE_ID.fullmatch(info.number) or info.number == number:
             continue
         conn.execute(
-            text(
-                "UPDATE media_files SET number = :number, content_type = :content_type, mosaic = :mosaic WHERE id = :id"
-            ),
+            text("UPDATE media_files SET number = :number, mosaic = :mosaic WHERE id = :id"),
             {
                 "number": info.number,
-                "content_type": info.content_type.name,
                 "mosaic": info.mosaic.name if info.mosaic is not None else None,
                 "id": row_id,
             },
